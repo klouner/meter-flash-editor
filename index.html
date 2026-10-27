@@ -1,0 +1,1802 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Meter Flash Editor</title>
+<style>
+:root{
+  --bg:#15171b; --panel:#1e2127; --panel2:#262a31; --line:#30353e;
+  --text:#e7e9ec; --muted:#98a0ab; --accent:#4fa3ff; --accent-ink:#06121f;
+  --warn:#ffb347; --bad:#ff6b6b; --ok:#5fd18b;
+}
+*{box-sizing:border-box}
+[hidden]{display:none !important}
+html,body{margin:0;background:var(--bg);color:var(--text);font:13px/1.45 "Segoe UI",system-ui,sans-serif}
+header{display:flex;gap:10px;align-items:center;padding:8px 16px;background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap}
+header h1{font-size:15px;font-weight:600;margin:0 10px 0 0}
+#fileinfo{color:var(--muted)}
+#dirty{color:var(--warn)}
+#health{padding:2px 8px;border-radius:10px;font-size:12px;cursor:pointer;display:none}
+#health.bad{display:inline;background:rgba(255,107,107,.15);color:var(--bad)}
+#health.ok{display:inline;background:rgba(95,209,139,.12);color:var(--ok)}
+button,select,input{font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:5px;padding:4px 8px}
+button{cursor:pointer;white-space:nowrap}
+button:hover:not(:disabled){border-color:var(--accent)}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
+button:disabled{opacity:.4;cursor:default}
+button.small{padding:2px 6px;font-size:12px}
+button.on{border-color:var(--accent);background:rgba(79,163,255,.18)}
+input.addr{width:96px;font-family:Consolas,ui-monospace,monospace}
+input.num{width:64px}
+input[type=range]{padding:0}
+.tabs{display:flex;padding:0 16px;background:var(--panel);border-bottom:1px solid var(--line)}
+.tab{padding:8px 14px;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;user-select:none}
+.tab.active{color:var(--text);border-color:var(--accent)}
+main{padding:12px 16px}
+.view{display:none}.view.active{display:block}
+.layout{display:grid;grid-template-columns:310px minmax(0,1fr);gap:14px;align-items:start}
+@media (max-width:860px){.layout{grid-template-columns:1fr}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px;margin-bottom:10px}
+.panel h3{margin:0 0 8px;font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600}
+.panel h2{margin:0 0 6px;font-size:15px}
+.row{display:flex;gap:6px;align-items:center;margin-bottom:6px;flex-wrap:wrap}
+.row>label{width:78px;color:var(--muted)}
+.hint{color:var(--muted);font-size:12px}
+.mono{font-family:Consolas,ui-monospace,monospace}
+.warnbox{border-left:3px solid var(--bad);background:rgba(255,107,107,.07);padding:10px 12px;border-radius:6px;margin:8px 0}
+.okbox{border-left:3px solid var(--ok);background:rgba(95,209,139,.07);padding:10px 12px;border-radius:6px;margin:8px 0}
+.infobox{border-left:3px solid var(--accent);background:rgba(79,163,255,.07);padding:10px 12px;border-radius:6px;margin:8px 0}
+ol{margin:4px 0;padding-left:20px} li{margin:2px 0}
+.wrap{overflow:auto;max-height:calc(100vh - 210px);background:#0a0b0d;border:1px solid var(--line);border-radius:8px}
+canvas.px{image-rendering:pixelated;display:block}
+#imgc{cursor:crosshair}
+#minimap{width:100%;cursor:crosshair;border:1px solid var(--line);border-radius:4px}
+.legend span{display:inline-block;width:10px;height:10px;border-radius:2px;margin:0 4px 0 8px;vertical-align:-1px}
+#status{margin:4px 0;min-height:18px}
+.cands .row{margin-bottom:3px}
+.empty{padding:60px 20px;text-align:center;color:var(--muted)}
+.guide ol{padding-left:20px} .guide li{margin:4px 0} .guide td{font-size:13px}
+.drop{outline:2px dashed var(--accent);outline-offset:-8px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg button{border:0;border-radius:0;border-right:1px solid var(--line)}
+.seg button:last-child{border-right:0}
+/* gallery */
+#gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px}
+.card{background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:6px;cursor:pointer;position:relative}
+.card:hover{border-color:var(--accent)}
+.card.cur{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.card .thumb{height:70px;display:flex;align-items:center;justify-content:center;background:#0a0b0d;border-radius:4px;overflow:hidden}
+.card .thumb canvas{max-width:100%;max-height:70px;image-rendering:pixelated}
+.card .nm{font-size:12px;margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card .meta{font-size:10px;color:var(--muted)}
+.card .x{position:absolute;top:3px;right:3px;display:none}
+.card:hover .x{display:block}
+/* fonts */
+.chips{display:flex;flex-wrap:wrap;gap:4px}
+.chip{padding:3px 10px;border-radius:12px;border:1px solid var(--line);background:var(--panel2);cursor:pointer;font-size:12px;user-select:none}
+.chip.on{border-color:var(--accent);background:rgba(79,163,255,.18)}
+.chip .n{color:var(--muted);margin-left:4px}
+#glyphs{display:flex;flex-wrap:wrap;gap:6px}
+.glyph{background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:4px 4px 2px;cursor:pointer;text-align:center;min-width:52px}
+.glyph:hover{border-color:var(--accent)}
+.glyph.changed{border-color:var(--warn)}
+.glyph.damaged{border-color:var(--bad);background:rgba(255,107,107,.08)}
+.glyph canvas{margin:0 auto}
+.glyph .ch{font-size:15px;line-height:1.2}
+.glyph .code{font-size:9px;color:var(--muted)}
+table{border-collapse:collapse;width:100%}
+td,th{border-bottom:1px solid var(--line);padding:5px 6px;text-align:left;vertical-align:top}
+th{color:var(--muted);font-weight:500}
+/* modal */
+#modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:10}
+#modal.open{display:flex}
+.dlg{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;max-width:96vw;max-height:94vh;overflow:auto;display:flex;gap:16px}
+.dlg h2{font-size:14px;margin:0 0 10px}
+#pal{display:flex;flex-wrap:wrap;gap:3px;margin:8px 0;max-width:460px}
+.sw{width:26px;height:26px;border:2px solid var(--line);border-radius:4px;cursor:pointer}
+.sw.sel{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+#edcanvas{cursor:crosshair;border:1px solid var(--line)}
+#genPanel{width:250px;border-left:1px solid var(--line);padding-left:14px}
+#genPanel .row>label{width:70px}
+.toast{position:fixed;bottom:16px;right:16px;background:var(--panel2);border:1px solid var(--line);padding:8px 12px;border-radius:6px;display:none;max-width:460px;z-index:20}
+.toast.bad{border-color:var(--bad)}
+details summary{cursor:pointer;color:var(--muted);margin:4px 0}
+/* text slots */
+.slot{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin-bottom:8px}
+.slot.done{border-color:rgba(95,209,139,.6)}
+.slot.warn{border-color:rgba(255,179,71,.6)}
+.slot .hd{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:4px}
+.slot .hd .t{font-weight:600}
+.slot .imgs{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start}
+.slot .imgs figure{margin:0}
+.slot .imgs figcaption{font-size:11px;color:var(--muted)}
+.slot canvas{image-rendering:pixelated;background:#000;border:1px solid var(--line);cursor:crosshair;max-width:100%}
+.slot .tr{display:flex;gap:6px;align-items:center;margin-top:6px;flex-wrap:wrap}
+.slot .tr input{flex:1;min-width:240px;font-size:14px}
+.badge{font-size:11px;padding:1px 7px;border-radius:9px;background:var(--panel2);color:var(--muted)}
+.badge.ok{color:var(--ok)} .badge.w{color:var(--warn)} .badge.b{color:var(--bad)}
+</style>
+</head>
+<body>
+<header>
+  <h1>Meter Flash Editor</h1>
+  <button class="primary" id="btnOpen" title="Дамп флешки и, по желанию, прошивку процессора (MF) — можно выбрать оба файла сразу">Открыть файлы…</button>
+  <input type="file" id="fileIn" accept=".bin,.BIN,*/*" multiple hidden>
+  <button id="btnSave" disabled>Сохранить BIN</button>
+  <button id="btnHelp" title="Какие файлы загружать и порядок работы">Инструкция</button>
+  <span id="fileinfo">Файл не загружен</span>
+  <span id="keyinfo" class="hint"></span>
+  <span id="health"></span>
+  <span id="dirty"></span>
+</header>
+<div class="tabs">
+  <div class="tab active" data-v="over">Обзор и проверка</div>
+  <div class="tab" data-v="tx">Перевод надписей</div>
+  <div class="tab" data-v="font">Шрифты</div>
+  <div class="tab" data-v="img">Картинки</div>
+  <div class="tab" data-v="diff">Изменения</div>
+</div>
+<main>
+  <div id="nofile" style="max-width:820px;margin:20px auto">
+    <div class="panel guide">
+      <h2>Какие файлы загружать</h2>
+      <table>
+        <thead><tr><th></th><th>Файл</th><th>Откуда</th><th>Размер</th></tr></thead>
+        <tbody>
+          <tr><td><b>1. Обязательно</b></td><td><b>Дамп внешней флешки</b> MX29GL640 — в нём все картинки и надписи. Его же потом записываете обратно.</td><td>программатор, микросхема MX29GL640 (TSOP48) на плате приборки</td><td>8 МБ<br><span class="mono hint">8 388 608 байт</span></td></tr>
+          <tr><td><b>2. Ключ</b></td><td><b>Прошивка процессора (MF)</b>, расшифрованная. Из неё берутся точные адреса и размеры всех картинок и надписей.<br><span class="hint">Для 838001AL7002 / 83800-1AL70 не нужна — уже встроена. Для другой модели без неё перевод надписей не заработает.</span></td><td>процессор MB91F058, основная флеш-память (обычно файл «… MF …»)</td><td>≈1 МБ<br><span class="mono hint">1 114 112 байт</span></td></tr>
+          <tr><td class="hint">Не нужны</td><td class="hint">WF (флеш данных процессора, 64 КБ) · EEPROM 93C86 (2 КБ, там пробег) · proc.bin (это зашифрованная прошивка — не подходит, нужен MF)</td><td></td><td></td></tr>
+        </tbody>
+      </table>
+      <h2 style="margin-top:14px">Как работать</h2>
+      <ol>
+        <li>Нажмите «Открыть файлы…» и выберите <b>дамп</b> (и, если модель другая, <b>MF</b> — можно оба сразу, порядок не важен). Или перетащите файлы в это окно.</li>
+        <li>Вкладка <b>«Обзор и проверка»</b> — убедитесь, что ключ найден и нет предупреждений.</li>
+        <li>Вкладка <b>«Перевод надписей»</b> — просмотрите русские варианты, поправьте где нужно, нажмите <b>«Применить все переводы»</b>.</li>
+        <li>При необходимости — вкладка <b>«Картинки»</b>: значки и прочая графика (экспорт/импорт PNG, правка пикселей).</li>
+        <li>Нажмите <b>«Сохранить BIN»</b> и запишите получившийся файл программатором в ту же микросхему MX29GL640, с проверкой после записи. <b>Оригинальный дамп сохраните отдельно.</b></li>
+      </ol>
+      <div class="hint">Файлы обрабатываются только в этом браузере и никуда не отправляются.</div>
+    </div>
+  </div>
+
+  <!-- ============ OVERVIEW ============ -->
+  <section class="view active" id="v-over" hidden>
+    <div class="panel">
+      <h2>Загруженные файлы</h2>
+      <div id="filesReport"></div>
+    </div>
+    <div class="panel">
+      <h2>Состояние дампа</h2>
+      <div id="healthReport"></div>
+    </div>
+    <div class="panel">
+      <h2>Сравнение с повторным чтением</h2>
+      <div class="hint">Считайте микросхему программатором ещё 1–2 раза (лучше после того, как переустановите её в адаптер) и добавьте эти файлы сюда. Совпадающие байты подтверждают друг друга; там, где чтения расходятся, редактор выберет правильный вариант: при трёх файлах — по большинству, при двух — тот, где нет признаков сбоя.</div>
+      <div class="row" style="margin-top:8px">
+        <button id="btnAddDump">Добавить повторное чтение…</button>
+        <input type="file" id="dumpIn" accept=".bin,.BIN,*/*" multiple hidden>
+        <button id="btnMerge" disabled>Собрать исправленный дамп</button>
+      </div>
+      <div id="cmpReport"></div>
+    </div>
+    <div class="panel">
+      <h2>Что лежит во флешке</h2>
+      <div id="mapReport" class="hint"></div>
+    </div>
+  </section>
+
+  <!-- ============ TEXT TRANSLATION ============ -->
+  <section class="view" id="v-tx" hidden>
+    <div class="panel">
+      <h2>Перевод надписей</h2>
+      <div class="hint" id="txIntro"></div>
+      <div class="row" style="margin-top:8px">
+        <button class="primary" id="txApplyAll">Применить все переводы</button>
+        <button id="txRevertAll">Вернуть японские надписи</button>
+        <span class="hint" id="txStat"></span>
+      </div>
+      <details>
+        <summary>Ещё: взять перевод из другого дампа, другая модель, сохранить переводы</summary>
+        <div class="row">
+          <button id="txRefBtn">Загрузить переведённый дамп…</button>
+          <input type="file" id="txRefIn" accept=".bin,.BIN,*/*" hidden>
+          <button id="txCopyAll" disabled>Взять из него все переводы</button>
+          <span class="hint" id="txRefInfo"></span>
+        </div>
+        <div class="row">
+          <button id="txMfBtn">Загрузить прошивку процессора (MF)…</button>
+          <input type="file" id="txMfIn" accept=".bin,.BIN,*/*" hidden>
+          <span class="hint">нужно только для другой модели приборки — из прошивки берутся адреса и размеры всех надписей</span>
+        </div>
+        <div class="row">
+          <button class="small" id="txSave">Сохранить переводы в файл…</button>
+          <button class="small" id="txLoad">Загрузить переводы из файла…</button>
+          <input type="file" id="txLoadIn" accept=".json" hidden>
+        </div>
+      </details>
+    </div>
+    <div class="panel">
+      <div class="row">
+        <label>Шрифт</label>
+        <select id="txFam"><option>Segoe UI</option><option>Arial</option><option>Bahnschrift</option><option>Tahoma</option><option>Verdana</option><option>Arial Narrow</option><option>Calibri</option></select>
+        <select id="txWt"><option value="400">обычный</option><option value="600" selected>полужирный</option><option value="700">жирный</option></select>
+        <label style="width:auto;margin-left:10px">Размер</label><input class="num" type="number" id="txSize" value="100" min="50" max="150" step="5">%
+        <label style="width:auto;margin-left:10px">Сжимать по ширине до</label><input class="num" type="number" id="txMinScale" value="70" min="40" max="100" step="5">%
+      </div>
+      <div class="row">
+        <label>Показать</label>
+        <div class="chips" id="txChips"></div>
+        <input id="txSearch" placeholder="поиск по тексту" style="width:200px;margin-left:8px">
+        <span style="flex:1"></span>
+        <button id="txPrev">◀</button><span id="txPage" class="mono"></span><button id="txNext">▶</button>
+      </div>
+    </div>
+    <div id="txList"></div>
+  </section>
+  <!-- ============ FONTS ============ -->
+  <section class="view" id="v-font" hidden>
+    <div class="infobox hint">
+      <b>Для перевода японской приборки шрифты не нужны.</b> Японская прошивка процессора выводит все сообщения готовыми картинками (вкладка «Перевод надписей») и к шрифтам не обращается — в заводском японском дампе их нет совсем.
+      Шрифты (таблицы WCLR) встречаются в дампах, куда залита многоязычная графика из другой версии приборки, — эта вкладка нужна только чтобы посмотреть или поправить их там.
+    </div>
+    <div class="panel">
+      <div class="row">
+        <label>Шрифт</label><span class="seg" id="fSeg"></span>
+        <span class="hint" id="fInfo"></span>
+      </div>
+      <div class="row"><label>Показать</label><div class="chips" id="fChips"></div></div>
+      <div class="row">
+        <label>Найти</label><input id="fFind" placeholder="буква или U+0416" style="width:170px">
+        <button id="fFindBtn">Открыть</button>
+        <span style="flex:1"></span>
+        <button id="fPrev">◀</button><span id="fPage" class="mono"></span><button id="fNext">▶</button>
+      </div>
+      <details>
+        <summary>Дополнительно: сдвиг данных шрифта</summary>
+        <div class="row">
+          <span class="hint">Если буквы на картинках не совпадают с подписями, сдвиньте начало данных на целые символы:</span>
+          <button class="small" id="fShiftM">− 1 символ</button><button class="small" id="fShiftP">+ 1 символ</button>
+          <span class="mono hint" id="fShiftV"></span>
+        </div>
+      </details>
+    </div>
+    <div id="glyphs"></div>
+  </section>
+
+  <!-- ============ IMAGES ============ -->
+  <section class="view" id="v-img" hidden>
+    <div class="layout">
+      <div>
+        <div class="panel" id="picPanel" hidden>
+          <h3>Картинки из прошивки</h3>
+          <div class="chips" id="picChips" style="margin-bottom:6px"></div>
+          <div id="picGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:6px"></div>
+          <div class="row" style="margin-top:6px;justify-content:center"><button class="small" id="picPrev">◀</button><span id="picPage" class="mono hint"></span><button class="small" id="picNext">▶</button></div>
+        </div>
+        <div class="panel">
+          <h3>Мои закладки</h3>
+          <div id="gallery"></div>
+          <div class="row" style="margin-top:8px">
+            <button class="small" id="bmExport">Экспорт списка</button>
+            <button class="small" id="bmImport">Импорт списка…</button>
+            <input type="file" id="bmIn" accept=".json" hidden>
+          </div>
+        </div>
+        <div class="panel">
+          <h3>Карта флешки</h3>
+          <canvas id="minimap" class="px" width="256" height="128"></canvas>
+          <div class="hint legend"><span style="background:#7f8a3a"></span>данные<span style="background:#22303d"></span>пусто<span style="background:#a46be0"></span>шрифты<span style="background:#4fa3ff"></span>просмотр</div>
+          <div class="hint mono" id="mmHover">строка = 64 КБ · клик — перейти</div>
+        </div>
+        <details class="panel">
+          <summary>Как найти и выделить картинку</summary>
+          <ol class="hint">
+            <li>Кликните по карте флешки — откроется это место.</li>
+            <li>Если видны косые полосы, подберите <b>ширину</b> ползунком или кнопкой «Подобрать», пока изображение не станет ровным. Мелкие значки — 4 бита, крупные картинки — 8 бит.</li>
+            <li>Если картинка разрезана вертикально (кусок справа, кусок слева на строку ниже), включите «Клик: начало» и кликните в её <b>левый верхний угол</b>.</li>
+            <li>Включите «Клик: конец» и кликните по её <b>последней строке</b>.</li>
+            <li>Нажмите «В галерею» — дальше её можно открывать одним кликом.</li>
+          </ol>
+        </details>
+      </div>
+      <div>
+        <div class="panel">
+          <div class="row">
+            <label>Адрес</label><input class="addr" id="iOff" value="0x043E80">
+            <button class="small" data-act="b-1" title="←">◀ байт</button><button class="small" data-act="b+1" title="→">байт ▶</button>
+            <button class="small" data-act="rowup" title="↑">↑ строка</button><button class="small" data-act="rowdn" title="↓">↓ строка</button>
+            <button class="small" data-act="pgup" title="PgUp">⇞</button><button class="small" data-act="pgdn" title="PgDn">⇟</button>
+          </div>
+          <div class="row">
+            <label>Ширина</label><input class="num" id="iW" type="number" min="1" value="28">
+            <input type="range" id="iWr" min="4" max="1024" value="28" style="width:220px">
+            <button class="small" data-act="w-1" title="[ или −">−1</button><button class="small" data-act="w+1" title="] или +">+1</button>
+            <button class="small" id="btnAuto">Подобрать</button>
+          </div>
+          <div class="cands" id="cands"></div>
+          <div class="row">
+            <label>Высота</label><input class="num" id="iH" type="number" min="1" value="28">
+            <label style="width:auto;margin-left:10px">Бит/пикс.</label>
+            <span class="seg" id="bppSeg"><button data-bpp="1">1</button><button data-bpp="2">2</button><button data-bpp="4" class="on">4</button><button data-bpp="8">8</button></span>
+            <label style="width:auto;margin-left:10px">Масштаб</label>
+            <select id="iZoom"><option>1</option><option>2</option><option selected>3</option><option>4</option><option>6</option><option>8</option><option>12</option></select>
+            <select id="iLsb" title="порядок пикселей в байте"><option value="1" selected>мл. биты первыми</option><option value="0">ст. биты первыми</option></select>
+          </div>
+          <div class="row" id="picRow" hidden>
+            <span class="t" id="picTitle" style="font-weight:600"></span>
+            <span class="seg" id="planeSeg"><button data-pl="mix" class="on">как на экране</button><button data-pl="base">изображение</button><button data-pl="alpha">прозрачность</button></span>
+            <button class="small" id="picManual" title="Отвязаться от таблицы и подбирать параметры вручную">ручной режим</button>
+          </div>
+          <div class="row">
+            <span class="seg" id="modeSeg">
+              <button data-mode="top" class="on" title="клик задаёт верхнюю строку">Клик: верх</button>
+              <button data-mode="start" title="клик задаёт левый верхний угол картинки (точный адрес)">Клик: начало</button>
+              <button data-mode="end" title="клик задаёт последнюю строку">Клик: конец</button>
+            </span>
+            <span style="flex:1"></span>
+            <button id="btnBm">★ В галерею</button>
+            <button id="btnEdit">Редактировать…</button>
+            <button id="btnExp">Экспорт PNG</button>
+            <button id="btnImp">Импорт PNG…</button>
+            <input type="file" id="pngIn" accept="image/png,image/*" hidden>
+          </div>
+          <div class="status mono hint" id="iInfo"></div>
+          <div class="status mono" id="status"></div>
+        </div>
+        <div class="wrap" id="imgWrap"><canvas id="imgc" class="px"></canvas></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ DIFF ============ -->
+  <section class="view" id="v-diff" hidden>
+    <div class="panel">
+      <div class="row"><button id="dRevertAll">Откатить всё</button><span class="hint" id="dSum"></span></div>
+      <table><thead><tr><th>Адрес</th><th>Длина</th><th>Что это</th><th></th></tr></thead><tbody id="dBody"></tbody></table>
+    </div>
+  </section>
+</main>
+
+<div id="modal"><div class="dlg">
+  <div>
+    <h2 id="edTitle">Редактор</h2>
+    <div class="row">
+      <label style="width:auto">Масштаб</label><input id="edZoom" type="range" min="2" max="32" value="12">
+      <button id="edUndo">↶ Отменить</button>
+      <button id="edFill">Залить цветом</button>
+      <label style="width:auto"><input type="checkbox" id="edGrid" checked> сетка</label>
+    </div>
+    <div class="hint">Левая кнопка — рисовать, правая — взять цвет (пипетка).</div>
+    <div id="pal"></div>
+    <div style="overflow:auto;max-height:62vh"><canvas id="edcanvas"></canvas></div>
+    <div class="row" style="margin-top:10px;justify-content:flex-end">
+      <button id="edExp">Экспорт PNG</button>
+      <button id="edImp">Импорт PNG…</button>
+      <button id="edCancel">Отмена</button>
+      <button class="primary" id="edApply">Применить</button>
+    </div>
+  </div>
+  <div id="genPanel">
+    <h2>Нарисовать из шрифта</h2>
+    <div class="hint" style="margin-bottom:8px">Буква рисуется системным шрифтом Windows в размер и по линии букв этого шрифта приборки.</div>
+    <div class="row"><label>Символ</label><input id="gChar" style="width:60px;font-size:16px;text-align:center"></div>
+    <div class="row"><label>Шрифт</label><select id="gFam" style="width:150px">
+      <option selected>Bahnschrift</option><option>Segoe UI</option><option>Arial</option><option>Arial Narrow</option><option>Tahoma</option>
+      <option>Verdana</option><option>Calibri</option><option>Consolas</option><option>Times New Roman</option><option>MS Gothic</option>
+    </select></div>
+    <div class="row"><label>Жирность</label><select id="gWt"><option value="300" selected>тонкий</option><option value="400">обычный</option><option value="600">полужирный</option><option value="700">жирный</option></select></div>
+    <div class="row"><label>Высота</label><input type="range" id="gSize" min="60" max="140" value="100" style="width:120px"><span id="gSizeV" class="mono hint"></span></div>
+    <div class="row"><label>Ширина</label><input type="range" id="gW" min="60" max="140" value="92" style="width:120px"><span id="gWV" class="mono hint"></span></div>
+    <div class="row"><label>Вверх/вниз</label><input type="range" id="gDy" min="-6" max="6" value="0" style="width:120px"><span id="gDyV" class="mono hint"></span></div>
+    <div class="row"><label style="width:auto"><input type="checkbox" id="gRef" checked> показать образец поверх</label></div>
+    <button class="primary" id="gApply" style="width:100%">Нарисовать</button>
+    <div class="hint" style="margin-top:8px">Потом можно поправить отдельные пиксели вручную. «Отменить» вернёт как было.</div>
+  </div>
+</div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+let DATA = null, ORIG = null, FNAME = 'flash.bin';
+let FONTS = [], EXTRA = [];
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const hex = (n, p = 6) => '0x' + n.toString(16).toUpperCase().padStart(p, '0');
+const parseAddr = s => { s = String(s).trim().replace(/^0x/i, ''); const v = parseInt(s, 16); return isNaN(v) ? 0 : v; };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+function toast(msg, bad) {
+  const t = $('#toast'); t.textContent = msg; t.className = 'toast' + (bad ? ' bad' : ''); t.style.display = 'block';
+  clearTimeout(toast.t); toast.t = setTimeout(() => t.style.display = 'none', bad ? 7000 : 3500);
+}
+
+// ---------- Bitmap access ----------
+// layout 'rows': row-major with byte stride; 'cols': column-major, bottom-up (font glyphs)
+class Bmp {
+  constructor(o) {
+    Object.assign(this, { lsb: true, layout: 'rows' }, o);
+    if (!this.stride) this.stride = Math.ceil(this.w * this.bpp / 8);
+  }
+  // 'flat': rows follow each other bit by bit with no padding (pictures from the firmware table)
+  bit(x, y) {
+    if (this.layout === 'rows') return y * this.stride * 8 + x * this.bpp;
+    if (this.layout === 'flat') return (y * this.w + x) * this.bpp;
+    return (x * this.h + (this.h - 1 - y)) * this.bpp;
+  }
+  shift(b) { return this.lsb ? (b & 7) : (8 - this.bpp - (b & 7)); }
+  // `map` (optional) translates stored codes to brightness and back; it must be its own inverse.
+  get(x, y, buf = DATA) {
+    const b = this.bit(x, y), i = this.base + (b >> 3);
+    if (i < 0 || i >= buf.length) return 0;
+    const v = (buf[i] >> this.shift(b)) & ((1 << this.bpp) - 1);
+    return this.map ? this.map[v] : v;
+  }
+  set(x, y, v, buf = DATA) {
+    const b = this.bit(x, y), i = this.base + (b >> 3);
+    if (i < 0 || i >= buf.length) return;
+    const m = (1 << this.bpp) - 1, sh = this.shift(b);
+    if (this.map) v = this.map[v];
+    buf[i] = (buf[i] & ~(m << sh)) | ((v & m) << sh);
+  }
+  byteAt(x, y) { return this.base + (this.bit(x, y) >> 3); }
+  get levels() { return 1 << this.bpp; }
+  get byteLen() { return this.layout === 'rows' ? this.stride * this.h : Math.ceil(this.w * this.h * this.bpp / 8); }
+  readLevels() {
+    const a = new Uint8Array(this.w * this.h);
+    for (let y = 0; y < this.h; y++) for (let x = 0; x < this.w; x++) a[y * this.w + x] = this.get(x, y);
+    return a;
+  }
+  writeLevels(a) {
+    for (let y = 0; y < this.h; y++) for (let x = 0; x < this.w; x++) this.set(x, y, a[y * this.w + x]);
+  }
+}
+
+const gray = (v, L) => Math.round(v * 255 / (L - 1));
+
+// Paint levels into ImageData; bytes changed vs original are tinted orange.
+function levelsToImageData(bmp, levels, markChanged) {
+  const id = new ImageData(bmp.w, bmp.h), d = id.data, L = bmp.levels;
+  for (let y = 0; y < bmp.h; y++) for (let x = 0; x < bmp.w; x++) {
+    const g = gray(levels[y * bmp.w + x], L), k = (y * bmp.w + x) * 4;
+    let ch = false;
+    if (markChanged) { const i = bmp.byteAt(x, y); ch = i < DATA.length && DATA[i] !== ORIG[i]; }
+    if (ch) { d[k] = Math.max(g, 90); d[k + 1] = Math.round(g * 0.65); d[k + 2] = 0; }
+    else { d[k] = d[k + 1] = d[k + 2] = g; }
+    d[k + 3] = 255;
+  }
+  return id;
+}
+function bmpCanvas(bmp, levels = bmp.readLevels()) {
+  const c = document.createElement('canvas'); c.width = bmp.w; c.height = bmp.h; c.className = 'px';
+  c.getContext('2d').putImageData(levelsToImageData(bmp, levels, false), 0, 0);
+  return c;
+}
+
+function downloadBlob(blob, name) {
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+function exportPng(bmp, levels, name) { bmpCanvas(bmp, levels).toBlob(b => downloadBlob(b, name), 'image/png'); }
+
+// Reads a PNG, checks size, converts luminance (alpha composited on black) to levels.
+function importPng(file, bmp) {
+  return new Promise((res, rej) => {
+    const img = new Image();
+    img.onload = () => {
+      if (img.width !== bmp.w || img.height !== bmp.h) {
+        rej(new Error(`Размер PNG ${img.width}×${img.height}, а нужно ровно ${bmp.w}×${bmp.h}. Размер картинки во флешке менять нельзя.`)); return;
+      }
+      const c = document.createElement('canvas'); c.width = bmp.w; c.height = bmp.h;
+      const ctx = c.getContext('2d'); ctx.drawImage(img, 0, 0);
+      URL.revokeObjectURL(img.src);
+      res(rgbaToLevels(ctx.getImageData(0, 0, bmp.w, bmp.h).data, bmp.w * bmp.h, bmp.levels));
+    };
+    img.onerror = () => rej(new Error('Не удалось прочитать картинку'));
+    img.src = URL.createObjectURL(file);
+  });
+}
+function rgbaToLevels(d, n, L) {
+  const out = new Uint8Array(n);
+  for (let i = 0; i < n; i++) {
+    const lum = (0.299 * d[i * 4] + 0.587 * d[i * 4 + 1] + 0.114 * d[i * 4 + 2]) * d[i * 4 + 3] / 255;
+    out[i] = Math.min(L - 1, Math.round(lum * (L - 1) / 255));
+  }
+  return out;
+}
+
+// ---------- Read-error signature ----------
+// Bad reads of this dump show bytes whose high nibble copies the low one (0x22, 0xCC, 0xDD…),
+// which genuine 2-bit glyph data almost never contains in bulk.
+const DUPODD = new Uint8Array(256);
+for (let v = 0; v < 256; v++) DUPODD[v] = ((v >> 4) === (v & 15) && ![0x00, 0x55, 0xAA, 0xFF].includes(v)) ? 1 : 0;
+function dupScore(buf, a, len) {
+  let nz = 0, odd = 0;
+  for (let i = a; i < a + len && i < buf.length; i++) { const v = buf[i]; if (v) { nz++; odd += DUPODD[v]; } }
+  return nz ? odd / nz : 0;
+}
+function glyphDamage(a, len) {
+  let ff = 0, run = 0, maxRun = 0;
+  for (let i = a; i < a + len; i++) { if (DATA[i] === 0xFF) { ff++; run++; maxRun = Math.max(maxRun, run); } else run = 0; }
+  if (ff === len) return 'стёрт (FF)';
+  if (maxRun >= 12) return 'частично стёрт (FF)'; // ~2 solid columns: not a real letter
+  return dupScore(DATA, a, len) >= 0.15 ? 'ошибка чтения' : null;
+}
+
+// ---------- File load / save ----------
+function loadBuffer(buf, name) {
+  DATA = new Uint8Array(buf); ORIG = DATA.slice(); FNAME = name; EXTRA = [];
+  $('#nofile').style.display = 'none';
+  $$('.view').forEach(v => v.hidden = false);
+  $('#btnSave').disabled = false;
+  let id = '';
+  if (DATA.length > 0x10020 && DATA[0x10000] === 0x55 && DATA[0x10001] === 0xAA) {
+    id = String.fromCharCode(...DATA.slice(0x10004, 0x10014)).trim();
+    if (id) id = ` · ID ${id} v${DATA[0x10014] | DATA[0x10015] << 8}`;
+  }
+  $('#fileinfo').textContent = `${name} · ${(DATA.length / 1048576).toFixed(2)} МБ${id}`;
+  refreshAll();
+}
+function refreshAll() {
+  scanFonts(); if (!TX.table || TX.model !== modelId()) initTx(); else buildItems();
+  PIC = null;
+  buildMinimap(); renderHealth(); renderCompare(); renderMap(); renderFontUI(); renderGallery(); renderPicGrid(); renderImg(); renderTx(); renderKey(); renderFiles(); updateDirty();
+}
+
+// Files are told apart by size: the flash dump is megabytes, the CPU firmware (MF) about 1 MB,
+// the CPU data flash (WF) 64 KB, the EEPROM a few KB. Only the dump is edited.
+let pendingMf = null;
+const FILES = { mf: null, wf: null, ee: null };
+const filledBytes = b => { let n = 0; for (const v of b) if (v !== 0xFF) n++; return n; };
+async function loadFiles(list) {
+  const files = await Promise.all([...list].map(async f => ({ f, b: new Uint8Array(await f.arrayBuffer()) })));
+  const dump = files.find(x => x.b.length >= 0x200000);
+  const mf = files.find(x => x.b.length >= 0x80000 && x.b.length < 0x200000);
+  for (const x of files) {
+    if (x === dump || x === mf) continue;
+    if (x.b.length === 0x10000) FILES.wf = { name: x.f.name, size: x.b.length, filled: filledBytes(x.b) };
+    else if (x.b.length <= 0x2000) FILES.ee = { name: x.f.name, size: x.b.length, filled: filledBytes(x.b) };
+    else { toast(`${x.f.name}: неизвестный файл (${x.b.length} байт)`, true); continue; }
+    toast(`${x.f.name}: ${x.b.length === 0x10000 ? 'флеш данных процессора (WF)' : 'EEPROM'} — для перевода не нужен, сведения на вкладке «Обзор»`);
+  }
+  if (dump) loadBuffer(dump.b.buffer, dump.f.name);
+  if (mf) { if (DATA) applyMf(mf.b, mf.f.name); else { pendingMf = mf; toast('Прошивка запомнена — теперь откройте дамп флешки'); } }
+  else if (dump && pendingMf) { applyMf(pendingMf.b, pendingMf.f.name); pendingMf = null; }
+  renderFiles();
+}
+function mfInfo(b, name, rows) {
+  const s = new TextDecoder('latin1').decode(b);
+  return {
+    name, size: b.length, rows,
+    prog: (s.match(/8380[0-9A-Z]{8}/) || [])[0], ver: (s.match(/\d{3}\.\d{2}\.\d{2}\.\d{2}/) || [])[0],
+    encrypted: !rows && looksEncrypted(b),
+  };
+}
+// Encrypted firmware looks like noise: near-maximal byte entropy at the start.
+function looksEncrypted(b) {
+  const n = Math.min(b.length, 0x10000), c = new Uint32Array(256); for (let i = 0; i < n; i++) c[b[i]]++;
+  let e = 0; for (const v of c) if (v) { const q = v / n; e -= q * Math.log2(q); }
+  return e > 7.5;
+}
+// Built-in firmware facts for the embedded key (read from 83800-1AL70 MF).
+const PRESET_MCU = { '838001AL7002': { prog: '838001AL6003', ver: '591.01.01.03', tableAt: 0x38070 } };
+function renderFiles() {
+  const box = $('#filesReport'); if (!box) return;
+  const rows = [];
+  if (DATA) {
+    const id = modelId(), oldLayout = DATA[0x10000] === 0x55, v = DATA[0x10014] | DATA[0x10015] << 8;
+    rows.push(['Дамп внешней флешки (MX29GL640)', esc(FNAME), `${(DATA.length / 1048576).toFixed(0)} МБ · номер графики <b>${esc(id || 'не распознан')}</b>${id && oldLayout ? ` v${v}` : ''}${id && !oldLayout ? ' (флешка разбита на разделы со своими номерами)' : ''}` +
+      (TX.table ? ` · картинок ${TX.table.length}, из них надписей ${TX.items.length} (японских ${TX.items.filter(it => it.jp).length})` : '') +
+      (FONTS.length ? ` · шрифтов WCLR: ${FONTS.length}` : ' · шрифтов нет') + ' · <b>этот файл и правим</b>']);
+  }
+  const mf = FILES.mf, pm = PRESET_MCU[modelId()];
+  if (mf) rows.push(['Прошивка процессора (MF)', esc(mf.name), mf.encrypted ? 'зашифрована (файл для iProg, как proc.bin) — для редактора не подходит, нужен расшифрованный MF, прочитанный скриптом'
+    : `${(mf.size / 1024).toFixed(0)} КБ · программа <b>${esc(mf.prog || '?')}</b> · версия ${esc(mf.ver || '?')}` + (mf.rows ? ` · таблица картинок по адресу ${hex(mf.rows.at)}, записей ${mf.rows.length}` : ' · таблица картинок не найдена') + ' · только читается']);
+  else if (pm && DATA) rows.push(['Прошивка процессора (MF)', 'встроена в редактор', `программа <b>${pm.prog}</b> · версия ${pm.ver} · таблица картинок по адресу ${hex(pm.tableAt)}`]);
+  if (FILES.wf) rows.push(['Флеш данных процессора (WF)', esc(FILES.wf.name), `64 КБ · заполнено ${FILES.wf.filled} байт — практически пустая, для графики и перевода не используется`]);
+  if (FILES.ee) rows.push(['EEPROM приборки (93C86)', esc(FILES.ee.name), `${FILES.ee.size} байт · заполнено ${FILES.ee.filled} · настройки приборки и пробег в закодированном виде. Редактор их не расшифровывает и не меняет; для перевода этот файл не нужен`]);
+  box.innerHTML = rows.length ? '<table><thead><tr><th>Что это</th><th>Файл</th><th>Сведения</th></tr></thead><tbody>' +
+    rows.map(r => `<tr><td>${r[0]}</td><td class="mono">${r[1]}</td><td>${r[2]}</td></tr>`).join('') + '</tbody></table>' : '<div class="hint">Файлы не загружены.</div>';
+}
+$('#btnOpen').onclick = () => $('#fileIn').click();
+$('#btnHelp').onclick = () => { const g = $('#nofile'); g.style.display = g.style.display === 'none' ? '' : 'none'; if (g.style.display !== 'none') window.scrollTo(0, 0); };
+$('#fileIn').onchange = e => { if (e.target.files.length) loadFiles(e.target.files); e.target.value = ''; };
+document.addEventListener('dragover', e => { e.preventDefault(); document.body.classList.add('drop'); });
+document.addEventListener('dragleave', e => { if (!e.relatedTarget) document.body.classList.remove('drop'); });
+document.addEventListener('drop', e => {
+  e.preventDefault(); document.body.classList.remove('drop');
+  if (e.dataTransfer.files.length) loadFiles(e.dataTransfer.files);
+});
+// Checksums of the graphics, all "NOT of the 32-bit sum of bytes", stored big-endian:
+// - final checksum in the last 4 bytes: over every byte before it (1AL70: after a copy of the
+//   55AA…/part-number header at 0x7FFFD0);
+// - sectioned flashes (12Y): each section starts with 8×55AA + part number, and its field at +0x20
+//   covers the whole section with that field and the final checksum counted as zeros.
+// The original CPU firmware can check them, so they are recomputed on every save.
+const CK_AT = 0x7FFFFC;
+const rd32 = (b, o) => ((b[o] << 24) | (b[o + 1] << 16) | (b[o + 2] << 8) | b[o + 3]) >>> 0;
+function wr32(b, o, v) { b[o] = v >>> 24; b[o + 1] = (v >>> 16) & 255; b[o + 2] = (v >>> 8) & 255; b[o + 3] = v & 255; }
+function isSectionHeader(b, o) {
+  for (let i = 0; i < 16; i += 2) if (b[o + i] !== 0x55 || b[o + i + 1] !== 0xAA) return false;
+  return b[o + 0x10] === 0x38; // part number "8380…"
+}
+function ckLayout(b) {
+  if (!b || b.length !== 0x800000) return null;
+  const secs = []; for (let o = 0; o < b.length; o += 0x10000) if (isSectionHeader(b, o)) secs.push(o);
+  if (secs.length >= 2 && secs[0] === 0) return { secs };
+  if (b[0x7FFFD0] === 0x55 && b[0x7FFFD1] === 0xAA && b[0x7FFFD2] === 0x55 && b[0x7FFFD3] === 0xAA) return { secs: [] };
+  return null;
+}
+function calcChecksum(b) { let s = 0; for (let i = 0; i < CK_AT; i++) s = (s + b[i]) >>> 0; return (~s) >>> 0; }
+function calcSection(b, L, k) {
+  const a = L.secs[k], e = L.secs[k + 1] || b.length; let s = 0;
+  for (let i = a; i < e; i++) { if ((i >= a + 0x20 && i < a + 0x24) || i >= CK_AT) continue; s = (s + b[i]) >>> 0; }
+  return (~s) >>> 0;
+}
+function checksumReport(b) {
+  const L = ckLayout(b); if (!L) return null;
+  const out = L.secs.map((a, k) => ({ name: `раздел ${hex(a)} (${String.fromCharCode(...b.slice(a + 0x10, a + 0x1C))})`, stored: rd32(b, a + 0x20), calc: calcSection(b, L, k) }));
+  out.push({ name: L.secs.length ? 'общая в конце флешки (правило как у 1AL70, для этой раскладки не подтверждено)' : 'общая в конце флешки', stored: rd32(b, CK_AT), calc: calcChecksum(b) });
+  return out;
+}
+function fixChecksums(b) {
+  const L = ckLayout(b); if (!L) return null;
+  L.secs.forEach((a, k) => wr32(b, a + 0x20, calcSection(b, L, k)));
+  wr32(b, CK_AT, calcChecksum(b));
+  return checksumReport(b);
+}
+$('#btnSave').onclick = () => {
+  const n = FNAME.replace(/(\.[^.]*)?$/, m => '_mod' + (m || '.bin'));
+  let note = '';
+  const before = checksumReport(DATA);
+  if (before) {
+    fixChecksums(DATA);
+    const fixed = before.filter(r => r.stored !== r.calc).length;
+    note = fixed ? `пересчитано контрольных сумм: ${fixed}` : 'контрольные суммы верны';
+    updateDirty(); renderHealth();
+  }
+  downloadBlob(new Blob([DATA], { type: 'application/octet-stream' }), n);
+  toast(`Сохранено: ${n}` + (note ? ` · ${note}` : ''));
+};
+window.addEventListener('beforeunload', e => { if (DATA && countChanged()) { e.preventDefault(); e.returnValue = ''; } });
+
+// ---------- Tabs ----------
+function showTab(v) {
+  $$('.tab').forEach(x => x.classList.toggle('active', x.dataset.v === v));
+  $$('.view').forEach(x => x.classList.toggle('active', x.id === 'v-' + v));
+  if (v === 'diff') renderDiff();
+  if (v === 'tx') renderTx();
+  if (v === 'font') renderGlyphs();
+  if (v === 'img') renderImg();
+}
+$$('.tab').forEach(t => t.onclick = () => showTab(t.dataset.v));
+$('#health').onclick = () => showTab('over');
+
+// ---------- Fonts (WCLR tables; glyph data ends right where the table starts) ----------
+function u16(o) { return DATA[o] | DATA[o + 1] << 8; }
+function u32(o) { return (DATA[o] | DATA[o + 1] << 8 | DATA[o + 2] << 16 | DATA[o + 3] << 24) >>> 0; }
+function scanFonts() {
+  const prevShift = Object.fromEntries(FONTS.map(f => [f.at, f.shift]));
+  FONTS = [];
+  for (let o = 0; o + 0x2c < DATA.length; o++) {
+    if (DATA[o] !== 0x57 || DATA[o + 1] !== 0x43 || DATA[o + 2] !== 0x4C || DATA[o + 3] !== 0x52) continue;
+    const cp = u32(o + 0x14), bpp = u16(o + 0x1e), W = u16(o + 0x20), H = u16(o + 0x22), n = u32(o + 0x28);
+    if (!n || n > 100000 || !H || H > 256 || ![1, 2, 4, 8].includes(bpp)) continue;
+    const { gl, broken, repaired, dataLen } = parseGlyphTable(o, n, W, H, bpp);
+    if (!gl.length) continue;
+    const f = { at: o, cp, bpp, W, H, n, broken, repaired, dataLen, gl, unit: Math.ceil(W * H * bpp / 32) * 4, shift: prevShift[o] || 0 };
+    f.base = o - dataLen + f.shift * f.unit;
+    if (f.base < 0) continue;
+    markDamage(f);
+    FONTS.push(f);
+  }
+}
+// Entries are (char u16, width u16, offset u32): chars ascend and glyphs follow each other
+// back to back. Damaged entries are filtered out by keeping the longest chain where both
+// char and offset ascend; damaged entries between two good ones are rebuilt when their
+// glyphs fit exactly into the gap.
+function parseGlyphTable(o, n, W, H, bpp) {
+  const gbytes = w => Math.ceil(w * H * bpp / 32) * 4;
+  const okW = w => w > 0 && w <= Math.max(64, W * 2);
+  const ents = [];
+  for (let i = 0; i < n; i++) {
+    const e = o + 0x2c + i * 8;
+    ents.push({ i, ch: u16(e), w: u16(e + 2), off: u32(e + 4) });
+  }
+  const cand = ents.filter(e => okW(e.w) && e.ch !== 0xFFFF && e.off < 0x1000000 && (e.off > 0 || e.i === 0));
+  // Longest strictly increasing subsequence by char (patience sorting).
+  const tails = [], prev = new Array(cand.length);
+  cand.forEach((e, k) => {
+    let lo = 0, hi = tails.length;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (cand[tails[mid]].ch < e.ch) lo = mid + 1; else hi = mid; }
+    prev[k] = lo ? tails[lo - 1] : -1; tails[lo] = k;
+  });
+  let chain = []; for (let k = tails[tails.length - 1]; k !== undefined && k >= 0; k = prev[k]) chain.push(cand[k]);
+  chain.reverse();
+  chain = chain.filter((e, k, a) => k === 0 || e.off >= a[k - 1].off + gbytes(a[k - 1].w));
+  const good = new Set(chain.map(e => e.i));
+  const gl = []; let repaired = 0;
+  const push = (e, off) => { gl.push({ ch: e.ch, w: e.w, off, bytes: gbytes(e.w), repaired: off !== e.off }); if (off !== e.off) repaired++; };
+  for (let k = 0; k < chain.length; k++) {
+    const a = chain[k], b = chain[k + 1];
+    push(a, a.off);
+    if (!b) break;
+    const mid = ents.slice(a.i + 1, b.i).filter(e => okW(e.w) && e.ch > a.ch && e.ch < b.ch);
+    const need = b.off - (a.off + gbytes(a.w));
+    if (mid.length && mid.length === b.i - a.i - 1 && mid.reduce((s, e) => s + gbytes(e.w), 0) === need
+        && mid.every((e, j) => j === 0 || e.ch > mid[j - 1].ch)) {
+      let off = a.off + gbytes(a.w);
+      for (const e of mid) { push(e, off); good.add(e.i); off += gbytes(e.w); }
+    }
+  }
+  // Entries after the last good one: rebuild plausible ones, count the rest as unknown glyphs.
+  let last = gl[gl.length - 1], end = last ? last.off + last.bytes : 0, unknown = 0;
+  for (const e of ents.slice((chain.length ? chain[chain.length - 1].i : -1) + 1)) {
+    if (okW(e.w) && e.ch > last.ch && e.ch !== 0xFFFF) { push(e, end); last = gl[gl.length - 1]; good.add(e.i); end += last.bytes; }
+    else unknown++;
+  }
+  gl.sort((x, y) => x.off - y.off);
+  return { gl, broken: n - good.size, repaired, dataLen: end + unknown * gbytes(W) };
+}
+function markDamage(f) {
+  f.damaged = 0;
+  for (const g of f.gl) { g.damage = glyphDamage(f.base + g.off, g.bytes); if (g.damage) f.damaged++; }
+}
+// In the 2-bit fonts 0 is background, 1 is full ink and 2, 3 are ever fainter edge shades.
+const FONT_MAP2 = [0, 3, 2, 1];
+const glyphBmp = (f, g) => new Bmp({ base: f.base + g.off, w: g.w, h: f.H, bpp: f.bpp, lsb: true, layout: 'cols', map: f.bpp === 2 ? FONT_MAP2 : null });
+const fontName = f => `${f.H} px` + (f.cp === 932 ? ' (многоязычный)' : f.cp === 1252 ? ' (латиница)' : '');
+const safeChar = c => (c >= 0x20 && c !== 0x7f && !(c >= 0xD800 && c < 0xE000)) ? String.fromCodePoint(c) : '·';
+const ucode = c => 'U+' + c.toString(16).toUpperCase().padStart(4, '0');
+
+const SCRIPTS = [
+  ['all', 'Все', () => true],
+  ['cyr', 'Кириллица', c => c >= 0x400 && c <= 0x4FF],
+  ['lat', 'Латиница', c => (c >= 0x41 && c <= 0x5A) || (c >= 0x61 && c <= 0x7A) || (c >= 0xC0 && c <= 0x24F)],
+  ['dig', 'Цифры', c => (c >= 0x30 && c <= 0x39) || (c >= 0xFF10 && c <= 0xFF19)],
+  ['sym', 'Знаки', c => (c >= 0x20 && c < 0xC0 && !((c >= 0x30 && c <= 0x39) || (c >= 0x41 && c <= 0x5A) || (c >= 0x61 && c <= 0x7A))) || (c >= 0x2000 && c < 0x3000)],
+  ['grk', 'Греческий', c => c >= 0x370 && c <= 0x3FF],
+  ['jp', 'Японский', c => (c >= 0x3000 && c <= 0x9FFF) || (c >= 0xFF00 && c <= 0xFFEF && !(c >= 0xFF10 && c <= 0xFF19))],
+  ['bad', 'Повреждённые', null],
+];
+let fontIdx = 0, fontScript = 'cyr', fontPage = 0; const PER_PAGE = 240;
+function renderFontUI() {
+  const seg = $('#fSeg'); seg.innerHTML = '';
+  FONTS.forEach((f, i) => {
+    const b = document.createElement('button'); b.textContent = fontName(f); b.className = i === fontIdx ? 'on' : '';
+    b.onclick = () => { fontIdx = i; fontPage = 0; renderFontUI(); renderGlyphs(); };
+    seg.appendChild(b);
+  });
+  const f = FONTS[fontIdx], chips = $('#fChips'); chips.innerHTML = '';
+  if (!f) return;
+  for (const [key, title, test] of SCRIPTS) {
+    const cnt = key === 'bad' ? f.damaged : f.gl.filter(g => test(g.ch)).length;
+    if (!cnt && key !== 'all') continue;
+    const c = document.createElement('span'); c.className = 'chip' + (key === fontScript ? ' on' : '');
+    c.innerHTML = `${title}<span class="n">${cnt}</span>`;
+    if (key === 'bad') c.style.color = 'var(--bad)';
+    c.onclick = () => { fontScript = key; fontPage = 0; renderFontUI(); renderGlyphs(); };
+    chips.appendChild(c);
+  }
+  if (!chips.querySelector('.on')) { fontScript = 'all'; chips.firstChild.classList.add('on'); }
+  $('#fShiftV').textContent = `сейчас: ${f.shift > 0 ? '+' : ''}${f.shift} · данные с ${hex(f.base)}`;
+}
+function visibleGlyphs(f) {
+  if (fontScript === 'bad') return f.gl.filter(g => g.damage);
+  const t = SCRIPTS.find(s => s[0] === fontScript)[2];
+  return f.gl.filter(g => t(g.ch));
+}
+function renderGlyphs() {
+  const box = $('#glyphs'); box.innerHTML = '';
+  const f = FONTS[fontIdx];
+  if (!f) { box.innerHTML = '<div class="hint">Таблицы шрифтов (WCLR) в файле не найдены.</div>'; $('#fInfo').textContent = ''; return; }
+  $('#fInfo').textContent = `${f.gl.length} символов · ${f.bpp} бит (4 оттенка)` +
+    (f.broken ? ` · битых записей в таблице: ${f.broken}` : '') + (f.damaged ? ` · повреждённых символов: ${f.damaged}` : '');
+  const list = visibleGlyphs(f), pages = Math.max(1, Math.ceil(list.length / PER_PAGE));
+  fontPage = Math.max(0, Math.min(pages - 1, fontPage));
+  $('#fPage').textContent = ` ${fontPage + 1} / ${pages} `;
+  const scale = f.H > 30 ? 1.5 : 2;
+  for (const g of list.slice(fontPage * PER_PAGE, (fontPage + 1) * PER_PAGE)) {
+    const b = glyphBmp(f, g), cell = document.createElement('div');
+    cell.className = 'glyph';
+    for (let i = b.base; i < b.base + g.bytes; i++) if (DATA[i] !== ORIG[i]) { cell.classList.add('changed'); break; }
+    if (g.damage) { cell.classList.add('damaged'); cell.title = 'Повреждён: ' + g.damage; }
+    const c = bmpCanvas(b); c.style.width = b.w * scale + 'px'; c.style.height = b.h * scale + 'px';
+    const ch = document.createElement('div'); ch.className = 'ch'; ch.textContent = safeChar(g.ch);
+    const code = document.createElement('div'); code.className = 'code mono'; code.textContent = ucode(g.ch).slice(2);
+    cell.append(c, ch, code);
+    cell.onclick = () => openGlyph(f, g);
+    box.appendChild(cell);
+  }
+  if (!list.length) box.innerHTML = '<div class="hint">Нет символов в этой группе.</div>';
+}
+function openGlyph(f, g) {
+  openEditor(glyphBmp(f, g), `Символ «${safeChar(g.ch)}» ${ucode(g.ch)} · ${g.w}×${f.H}` + (g.damage ? ' · ⚠ повреждён в дампе' : ''),
+    () => { markDamage(f); renderFontUI(); renderGlyphs(); }, { ch: g.ch, font: f });
+}
+$('#fPrev').onclick = () => { fontPage--; renderGlyphs(); };
+$('#fNext').onclick = () => { fontPage++; renderGlyphs(); };
+function shiftFont(d) { const f = FONTS[fontIdx]; if (!f) return; f.shift += d; f.base += d * f.unit; f.metrics = null; markDamage(f); renderFontUI(); renderGlyphs(); }
+$('#fShiftM').onclick = () => shiftFont(-1);
+$('#fShiftP').onclick = () => shiftFont(1);
+$('#fFindBtn').onclick = () => {
+  const f = FONTS[fontIdx]; if (!f) return;
+  const s = $('#fFind').value.trim(); if (!s) return;
+  const m = s.match(/^(?:U\+|0x)([0-9a-f]+)$/i), code = m ? parseInt(m[1], 16) : s.codePointAt(0);
+  const g = f.gl.find(g => g.ch === code);
+  if (!g) { toast('В этом шрифте такого символа нет', true); return; }
+  fontScript = 'all'; fontPage = Math.floor(f.gl.indexOf(g) / PER_PAGE); renderFontUI(); renderGlyphs(); openGlyph(f, g);
+};
+$('#fFind').addEventListener('keydown', e => { if (e.key === 'Enter') $('#fFindBtn').click(); });
+
+// Cap height and baseline, measured on an undamaged flat capital of the same alphabet
+// (scripts differ: in the 28 px font Latin capitals are taller than Cyrillic ones).
+const METRIC_REFS = {
+  cyr: [0x41F, 0x41D, 0x422, 0x428, 0x415],
+  grk: [0x3A0, 0x397, 0x3A4, 0x395],
+  lat: [0x48, 0x49, 0x45, 0x54, 0x4C],
+};
+const scriptOf = ch => ch >= 0x400 && ch <= 0x4FF ? 'cyr' : ch >= 0x370 && ch <= 0x3FF ? 'grk' : 'lat';
+function fontMetrics(f, ch) {
+  const key = scriptOf(ch);
+  f.metrics = f.metrics || {};
+  if (f.metrics[key]) return f.metrics[key];
+  let top = Math.round(f.H * 0.18), bottom = Math.round(f.H * 0.85);
+  for (const r of [...METRIC_REFS[key], ...METRIC_REFS.lat, ...METRIC_REFS.cyr]) {
+    const g = f.gl.find(g => g.ch === r && !g.damage);
+    if (!g) continue;
+    const b = glyphBmp(f, g), lv = b.readLevels(); let t = -1, bt = -1;
+    for (let y = 0; y < b.h; y++) for (let x = 0; x < b.w; x++) if (lv[y * b.w + x] >= 2) { if (t < 0) t = y; bt = y; }
+    if (t >= 0) { top = t; bottom = bt; break; }
+  }
+  return (f.metrics[key] = { capTop: top, baseline: bottom + 1 });
+}
+
+// ---------- Overview: health, compare, map ----------
+function renderHealth() {
+  const box = $('#healthReport'), badge = $('#health');
+  const totalDamaged = FONTS.reduce((s, f) => s + f.damaged, 0), totalBroken = FONTS.reduce((s, f) => s + f.broken, 0);
+  let html = '';
+  if (totalDamaged > 20 || totalBroken > 20) {
+    badge.className = 'bad'; badge.textContent = '⚠ шрифты повреждены';
+    html += `<div class="warnbox"><b>Шрифты в этом дампе повреждены.</b>
+      <ol class="hint">
+        <li>${totalDamaged} символов испорчены характерным образом: в каждом байте старшая половина повторяет младшую (0x22, 0xCC, 0xDD…). В настоящих данных так не бывает.</li>
+        <li>В таблице символов ${totalBroken} записей забиты FF/00.</li>
+        <li>Это может быть ошибка чтения, а может быть так записано в самой микросхеме. Проверить просто: считайте чип ещё раз и добавьте файл ниже — если чтения совпадут, повреждение в самом чипе.</li>
+      </ol>
+      Для японской прошивки эти шрифты не нужны (в заводском дампе их нет) — на перевод надписей это не влияет.</div>`;
+  } else {
+    badge.className = 'ok'; badge.textContent = '✓ явных ошибок не видно';
+    html += `<div class="okbox">${FONTS.length ? 'Признаков ошибок чтения в шрифтах не найдено.' : 'Шрифтов в дампе нет — для японской прошивки это нормально, все тексты в ней картинками.'} Для надёжности стоит сравнить с повторным чтением микросхемы.</div>`;
+  }
+  const rep = checksumReport(ORIG);
+  if (rep) {
+    const bad = rep.filter(r => r.stored !== r.calc), nowBad = checksumReport(DATA).some(r => r.stored !== r.calc);
+    const list = rep.map(r => `<li>${esc(r.name)}: ${r.stored === r.calc ? '<span style="color:var(--ok)">верна</span>' : `<span style="color:var(--bad)">не сходится</span> (записано ${r.stored.toString(16).toUpperCase()}, должно быть ${r.calc.toString(16).toUpperCase()})`}</li>`).join('');
+    html += !bad.length
+      ? `<div class="okbox">Контрольные суммы графики в открытом дампе верны.${nowBad ? ' После ваших правок они изменятся — редактор пересчитает их сам при «Сохранить BIN».' : ''}<ol class="hint">${list}</ol></div>`
+      : `<div class="warnbox"><b>Контрольные суммы графики в этом дампе не сходятся.</b> Графику меняли, а суммы не пересчитали — с заводской программой процессора такая флешка может не пройти проверку (поэтому прежний переводчик, видимо, и шил изменённую программу процессора). При «Сохранить BIN» редактор запишет правильные суммы.<ol class="hint">${list}</ol></div>`;
+  }
+  html += TX.table
+    ? `<div class="okbox">Ключ: ${esc(TX.src)} — ${TX.table.length} картинок, японских надписей ${TX.items.filter(it => it.jp).length}. Можно переходить к переводу.</div>`
+    : `<div class="warnbox">Ключ не найден: для этой модели (${esc(modelId() || 'номер не распознан')}) нет встроенной таблицы. Откройте вместе с дампом файл прошивки процессора <b>MF</b> (≈1 МБ) — без него надписи и картинки придётся искать вручную.</div>`;
+  if (FONTS.length) {
+    html += '<table><thead><tr><th>Шрифт</th><th>Символов</th><th>Повреждено</th><th>Битых записей таблицы</th><th>Восстановлено адресов</th></tr></thead><tbody>';
+    for (const f of FONTS) html += `<tr><td>${esc(fontName(f))} · ${hex(f.at)}</td><td>${f.gl.length}</td><td>${f.damaged}</td><td>${f.broken}</td><td>${f.repaired}</td></tr>`;
+    html += '</tbody></table>';
+  }
+  box.innerHTML = html;
+}
+function renderMap() {
+  const parts = [];
+  parts.push('<b>0x000000–0x01FFFF</b> — служебный заголовок и номер детали.');
+  if (TX.table) {
+    const jp = TX.items.filter(it => it.jp).length;
+    parts.push(`<b>${hex(TX.table[0].a)}–${hex(TX.table[TX.table.length - 1].a)}</b> — ${TX.table.length} картинок (${esc(TX.src)}): значки, шкалы, фоны экрана 480×272 и надписи.`);
+    parts.push(`Надписи — готовые картинки текста (маска 1 бит + сглаживание 4 бита на пиксель)${jp ? `, японских из них ${jp}` : ''}. Их перевод — на вкладке «Перевод надписей».`);
+  } else {
+    parts.push('<b>0x020000–0x43FFFF</b> — картинки и надписи. Адреса и размеры хранятся в прошивке процессора: загрузите её файл (MF) на вкладке «Перевод надписей», чтобы редактор нашёл их точно.');
+  }
+  for (const f of FONTS) parts.push(`<b>${hex(f.base)}–${hex(f.at + 0x2c + f.n * 8 - 1)}</b> — шрифт ${esc(fontName(f))}: ${f.gl.length} символов (изображения символов, затем таблица). В заводской японской прошивке этих шрифтов нет — они появились в переделанной версии.`);
+  $('#mapReport').innerHTML = parts.map(p => `<div style="margin-bottom:6px">${p}</div>`).join('');
+}
+
+$('#btnAddDump').onclick = () => DATA && $('#dumpIn').click();
+$('#dumpIn').onchange = async e => {
+  for (const f of e.target.files) {
+    const b = new Uint8Array(await f.arrayBuffer());
+    if (b.length !== ORIG.length) { toast(`${f.name}: другой размер (${b.length} байт) — это не то же чтение`, true); continue; }
+    EXTRA.push({ name: f.name, data: b });
+    EXTRA.mergeReport = null;
+  }
+  e.target.value = ''; renderCompare();
+};
+function diffList(a, b) {
+  const r = []; let s = -1, last = -100, n = 0;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] === b[i]) continue;
+    n++;
+    if (i - last > 16) { if (s >= 0) r.push([s, last]); s = i; }
+    last = i;
+  }
+  if (s >= 0) r.push([s, last]);
+  return { ranges: r, bytes: n };
+}
+function renderCompare() {
+  const box = $('#cmpReport');
+  $('#btnMerge').disabled = !EXTRA.length;
+  if (!EXTRA.length) { box.innerHTML = ''; return; }
+  let html = '<table><thead><tr><th>Файл</th><th>Отличается от открытого</th><th>Участков</th></tr></thead><tbody>';
+  for (const x of EXTRA) {
+    const d = x.cmp || (x.cmp = diffList(ORIG, x.data));
+    html += `<tr><td>${esc(x.name)}</td><td>${d.bytes ? d.bytes + ' байт' : '<span style="color:var(--ok)">полностью совпадает</span>'}</td><td>${d.ranges.length}</td></tr>`;
+  }
+  html += '</tbody></table>';
+  const allSame = EXTRA.every(x => !x.cmp.bytes);
+  if (EXTRA.mergeReport) html += '';
+  else if (allSame) html += '<div class="okbox">Все чтения одинаковые. Значит, содержимое микросхемы именно такое — испорченные места (если они есть) находятся в самом чипе, а не в чтении.</div>';
+  else html += `<div class="infobox">Чтения расходятся — это подтверждает ошибки чтения. Нажмите «Собрать исправленный дамп»${EXTRA.length < 2 ? '. С тремя файлами результат надёжнее (выбор по большинству).' : '.'}</div>`;
+  if (EXTRA.mergeReport) html += EXTRA.mergeReport;
+  box.innerHTML = html;
+}
+$('#btnMerge').onclick = () => {
+  const reads = [ORIG, ...EXTRA.map(x => x.data)], N = ORIG.length, merged = ORIG.slice();
+  // Collect ranges where any read differs, then choose per range.
+  const diff = new Uint8Array(N);
+  for (const r of reads) for (let i = 0; i < N; i++) if (r[i] !== ORIG[i]) diff[i] = 1;
+  const ranges = []; let s = -1, last = -100;
+  for (let i = 0; i < N; i++) { if (!diff[i]) continue; if (i - last > 16) { if (s >= 0) ranges.push([s, last]); s = i; } last = i; }
+  if (s >= 0) ranges.push([s, last]);
+  let fromVote = 0, fromClean = 0, unsure = 0;
+  for (const [a, b] of ranges) {
+    const len = b - a + 1;
+    if (reads.length >= 3) {
+      for (let i = a; i <= b; i++) {
+        const cnt = new Map(); for (const r of reads) cnt.set(r[i], (cnt.get(r[i]) || 0) + 1);
+        let best = merged[i], bc = 0; for (const [v, c] of cnt) if (c > bc) { best = v; bc = c; }
+        if (bc * 2 > reads.length) { merged[i] = best; fromVote++; }
+        else { merged[i] = cleanest(reads, a, len)[i]; unsure++; }
+      }
+    } else {
+      const pick = cleanest(reads, a, len); merged.set(pick.subarray(a, b + 1), a); fromClean += len;
+    }
+  }
+  // Keep the user's edits; replace the untouched bytes and the baseline with the merged read.
+  let kept = 0;
+  for (let i = 0; i < N; i++) { if (DATA[i] !== ORIG[i]) kept++; else DATA[i] = merged[i]; }
+  ORIG = merged; FNAME = FNAME.replace(/(\.[^.]*)?$/, m => '_fixed' + (m || '.bin'));
+  EXTRA.forEach(x => x.cmp = null);
+  EXTRA.mergeReport = `<div class="okbox">Собран исправленный дамп: участков с расхождениями ${ranges.length}` +
+    (fromVote ? `, по большинству выбрано ${fromVote} байт` : '') + (fromClean ? `, по признаку «без сбоя» — ${fromClean} байт` : '') +
+    (unsure ? `, ⚠ без однозначного большинства — ${unsure} байт` : '') + (kept ? `. Ваши правки (${kept} байт) сохранены` : '') +
+    `. Теперь работа идёт с ним, «Сохранить BIN» сохранит исправленный файл.</div>`;
+  refreshAll(); toast('Исправленный дамп собран');
+};
+// The read whose bytes in [a, a+len) look least like the nibble-copy read error.
+function cleanest(reads, a, len) {
+  let best = reads[0], bs = Infinity;
+  for (const r of reads) { const sc = dupScore(r, Math.max(0, a - 64), len + 128); if (sc < bs) { bs = sc; best = r; } }
+  return best;
+}
+
+// ---------- Images view ----------
+let bpp = 4, clickMode = 'top';
+// PIC: a picture chosen from the firmware table ({e, plane}); null in manual mode.
+let PIC = null;
+function picBmp(e, plane) {
+  const pl = planes(e);
+  return plane === 'alpha' && pl.alpha >= 0
+    ? new Bmp({ base: pl.alpha, w: e.w, h: e.h, bpp: 4, layout: 'flat' })
+    : new Bmp({ base: e.a, w: e.w, h: e.h, bpp: pl.b, layout: 'flat' });
+}
+function curBmp() {
+  if (PIC) return picBmp(PIC.e, PIC.plane === 'alpha' ? 'alpha' : 'base');
+  return new Bmp({
+    base: parseAddr($('#iOff').value), w: Math.max(1, +$('#iW').value | 0), h: Math.max(1, +$('#iH').value | 0),
+    bpp, lsb: $('#iLsb').value === '1'
+  });
+}
+const fmtName = f => { const i = fmtInfo(f); return !i ? 'формат не определён' : `${i.b} бит` + (i.alpha ? ' + прозрачность 4 бита' : ''); };
+// Picture as it appears on screen: base brightness weighted by its alpha, over a checkerboard.
+function picImageData(e, buf = DATA) {
+  const pl = planes(e), base = picBmp(e, 'base'), L = (1 << pl.b) - 1, id = new ImageData(e.w, e.h), d = id.data;
+  for (let y = 0; y < e.h; y++) for (let x = 0; x < e.w; x++) {
+    const i = y * e.w + x, k = i * 4, g = base.get(x, y, buf) * 255 / L;
+    const a = pl.alpha >= 0 ? getA(buf, pl, i) / 15 : 1, bg = ((x >> 3) + (y >> 3)) & 1 ? 40 : 24;
+    const v = Math.round(g * a + bg * (1 - a));
+    let r = v, gg = v, b = v;
+    if (buf === DATA && changedPx(e, pl, i)) { r = Math.max(v, 90); gg = Math.round(v * 0.65); b = 0; }
+    d[k] = r; d[k + 1] = gg; d[k + 2] = b; d[k + 3] = 255;
+  }
+  return id;
+}
+function changedPx(e, pl, i) {
+  const j = e.a + ((i * pl.b) >> 3); if (DATA[j] !== ORIG[j]) return true;
+  return pl.alpha >= 0 && DATA[pl.alpha + (i >> 1)] !== ORIG[pl.alpha + (i >> 1)];
+}
+function openPic(e) {
+  PIC = { e, plane: PIC ? PIC.plane : 'mix' };
+  if (!(planes(e).alpha >= 0)) PIC.plane = 'base';
+  $('#iOff').value = hex(e.a); $('#iW').value = e.w; $('#iH').value = e.h; setBpp(planes(e).b);
+  renderImg(); renderPicGrid();
+}
+$$('#planeSeg button').forEach(b => b.onclick = () => { if (PIC) { PIC.plane = b.dataset.pl; renderImg(); } });
+$('#picManual').onclick = () => { PIC = null; renderImg(); renderPicGrid(); };
+function setBpp(v) { bpp = v; $$('#bppSeg button').forEach(b => b.classList.toggle('on', +b.dataset.bpp === v)); }
+$$('#bppSeg button').forEach(b => b.onclick = () => { PIC = null; setBpp(+b.dataset.bpp); renderImg(); });
+$$('#modeSeg button').forEach(b => b.onclick = () => { clickMode = b.dataset.mode; $$('#modeSeg button').forEach(x => x.classList.toggle('on', x === b)); });
+function setOff(o) { PIC = null; o = Math.max(0, Math.min(DATA ? DATA.length - 1 : 0, o)); $('#iOff').value = hex(o); renderImg(); }
+function setView(m) {
+  PIC = null;
+  $('#iOff').value = hex(m.off); $('#iW').value = m.w; $('#iH').value = m.h; setBpp(m.bpp);
+  $('#iLsb').value = m.lsb === false ? '0' : '1'; renderImg();
+}
+
+function renderImg() {
+  if (!DATA) return;
+  const b = curBmp();
+  $('#iWr').value = Math.min(1024, b.w);
+  if (b.w * b.h > 4e6) { toast('Слишком большая область (больше 4 млн пикселей)', true); return; }
+  const c = $('#imgc'); c.width = b.w; c.height = b.h;
+  c.getContext('2d').putImageData(PIC && PIC.plane === 'mix' ? picImageData(PIC.e) : levelsToImageData(b, b.readLevels(), true), 0, 0);
+  const z = +$('#iZoom').value; c.style.width = b.w * z + 'px'; c.style.height = b.h * z + 'px';
+  $('#picRow').hidden = !PIC;
+  if (PIC) {
+    const pl = planes(PIC.e), k = TX.table.indexOf(PIC.e);
+    $('#picTitle').textContent = `Картинка №${k + 1} · ${PIC.e.w}×${PIC.e.h} · ${fmtName(PIC.e.fmt)}`;
+    $('#planeSeg').hidden = !(pl.alpha >= 0);
+    $$('#planeSeg button').forEach(x => x.classList.toggle('on', x.dataset.pl === PIC.plane));
+    $('#iInfo').textContent = `${hex(PIC.e.a)} … ${hex(pl.end - 1)} · ${pl.end - PIC.e.a} байт · адрес и размер взяты из таблицы прошивки`;
+  } else $('#iInfo').textContent = `${hex(b.base)} … ${hex(b.base + b.byteLen - 1)} · ${b.w}×${b.h} px · ${b.byteLen} байт`;
+  drawMinimapView();
+  $$('.card').forEach(el => el.classList.toggle('cur', +el.dataset.off === b.base));
+}
+['#iOff', '#iW', '#iH', '#iLsb'].forEach(s => $(s).addEventListener('change', () => { PIC = null; renderImg(); }));
+$('#iZoom').addEventListener('change', renderImg);
+$('#iWr').addEventListener('input', () => { PIC = null; $('#iW').value = $('#iWr').value; renderImg(); });
+
+function navAct(a) {
+  if (!DATA) return;
+  const b = curBmp();
+  const moves = { pgup: -b.stride * b.h, pgdn: b.stride * b.h, rowup: -b.stride, rowdn: b.stride, 'b-1': -1, 'b+1': 1 };
+  if (PIC) { // in table mode the keys step through the pictures
+    const k = TX.table.indexOf(PIC.e), d = { 'b-1': -1, rowup: -1, pgup: -1, 'b+1': 1, rowdn: 1, pgdn: 1 }[a];
+    if (d && TX.table[k + d]) openPic(TX.table[k + d]);
+    return;
+  }
+  if (a in moves) setOff(b.base + moves[a]);
+  if (a === 'w-1' || a === 'w+1') { $('#iW').value = Math.max(1, b.w + (a === 'w+1' ? 1 : -1)); renderImg(); }
+}
+$$('[data-act]').forEach(btn => btn.onclick = () => navAct(btn.dataset.act));
+document.addEventListener('keydown', e => {
+  if (!$('#v-img').classList.contains('active') || $('#modal').classList.contains('open')) return;
+  if (/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName) && document.activeElement.type !== 'range') return;
+  const k = { ArrowUp: 'rowup', ArrowDown: 'rowdn', ArrowLeft: 'b-1', ArrowRight: 'b+1', PageUp: 'pgup', PageDown: 'pgdn', '+': 'w+1', '=': 'w+1', ']': 'w+1', '-': 'w-1', '[': 'w-1' }[e.key];
+  if (k) { e.preventDefault(); navAct(k); }
+});
+
+function canvasPixel(e) {
+  const c = $('#imgc'), r = c.getBoundingClientRect();
+  return { x: Math.floor((e.clientX - r.left) * c.width / r.width), y: Math.floor((e.clientY - r.top) * c.height / r.height) };
+}
+$('#imgc').addEventListener('mousemove', e => {
+  if (!DATA) return;
+  const b = curBmp(), p = canvasPixel(e);
+  if (p.x < 0 || p.y < 0 || p.x >= b.w || p.y >= b.h) return;
+  const i = b.byteAt(p.x, p.y);
+  $('#status').textContent = `x=${p.x} y=${p.y} · байт ${hex(i)} = ${DATA[i].toString(16).padStart(2, '0')} · яркость ${b.get(p.x, p.y)}/${b.levels - 1}`
+    + (DATA[i] !== ORIG[i] ? ` (было ${ORIG[i].toString(16).padStart(2, '0')})` : '');
+});
+$('#imgc').addEventListener('click', e => {
+  if (PIC) return;
+  const b = curBmp(), p = canvasPixel(e);
+  const mode = e.shiftKey ? 'end' : e.altKey ? 'start' : clickMode;
+  if (mode === 'end') { $('#iH').value = p.y + 1; renderImg(); }
+  else if (mode === 'start') {
+    const px = bpp < 8 ? p.x - p.x % (8 / bpp) : p.x; // a picture starts on a whole byte
+    setOff(b.byteAt(px, p.y));
+  }
+  else setOff(b.base + p.y * b.stride);
+});
+
+// Stride detection: at the true row stride s (bytes) a pixel resembles the one s bytes later,
+// so the mean pixel difference d[s] is a local minimum well below its surroundings.
+function strideCandidates(start, len, bpp) {
+  const per = 8 / bpp, m = (1 << bpp) - 1, n = Math.floor(len * per), px = new Uint8Array(n);
+  for (let i = 0; i < n; i++) px[i] = (DATA[start + Math.floor(i / per)] >> ((i % per) * bpp)) & m;
+  const maxS = Math.min(1600, Math.floor(len / 3)), d = new Float32Array(maxS + 24);
+  for (let s = 1; s < maxS + 24; s++) {
+    const sp = s * per; let sum = 0, c = 0;
+    for (let i = 0; i + sp < n; i += 2) { sum += Math.abs(px[i] - px[i + sp]); c++; }
+    d[s] = c ? sum / c / m : 1;
+  }
+  const out = [];
+  for (let s = 4; s <= maxS; s++) {
+    if (!(d[s] < d[s - 1] && d[s] < d[s + 1])) continue;
+    const win = [];
+    for (let t = Math.max(1, s - 20); t <= s + 20; t++) if (Math.abs(t - s) > 3) win.push(d[t]);
+    win.sort((a, c) => a - c);
+    const med = win[win.length >> 1];
+    out.push({ s, bpp, score: (med - d[s]) / (med + 0.003) });
+  }
+  return out;
+}
+$('#btnAuto').onclick = () => {
+  if (!DATA) return;
+  const b = curBmp(), len = Math.max(512, Math.min(0x8000, b.byteLen, DATA.length - b.base));
+  const best = new Map();
+  for (const k of [...strideCandidates(b.base, len, 4), ...strideCandidates(b.base, len, 8)]) {
+    const cur = best.get(k.s);
+    if (!cur || k.score > cur.score) best.set(k.s, k);
+  }
+  const out = [];
+  for (const k of [...best.values()].sort((a, c) => c.score - a.score)) {
+    if (k.score < 0.15 || out.length >= 4) break;
+    if (out.some(o => k.s % o.s === 0)) continue;
+    out.push(k);
+  }
+  const box = $('#cands'); box.innerHTML = '';
+  if (!out.length) { box.innerHTML = '<div class="hint">Ширину не удалось определить: в окне пусто или несколько разных картинок. Уменьшите высоту, чтобы в окне была одна картинка.</div>'; return; }
+  const hdr = document.createElement('div'); hdr.className = 'hint'; hdr.textContent = 'Варианты (лучший первый) — кликните, чтобы применить:'; box.appendChild(hdr);
+  for (const k of out) {
+    const line = document.createElement('div'); line.className = 'row';
+    for (const bp of k.bpp === 8 ? [8, 4] : [4, 8]) {
+      const w = k.s * 8 / bp, btn = document.createElement('button');
+      btn.className = 'small'; btn.textContent = `${w} px · ${bp} бит`; btn.title = `уверенность ${k.score.toFixed(2)}`;
+      btn.onclick = () => { $('#iW').value = w; setBpp(bp); renderImg(); };
+      line.appendChild(btn);
+    }
+    box.appendChild(line);
+  }
+};
+
+// ---------- Minimap: 1 px = 256 bytes, row = 64 KB ----------
+let mmBase = null;
+function buildMinimap() {
+  const c = $('#minimap'), rows = Math.ceil(DATA.length / 65536);
+  c.height = rows;
+  const id = new ImageData(256, rows), d = id.data, cnt = new Uint16Array(256);
+  for (let p = 0; p < 256 * rows; p++) {
+    const o = p * 256, k = p * 4; d[k + 3] = 255;
+    if (o >= DATA.length) continue;
+    if (FONTS.some(f => o >= f.base && o < f.at + 0x2c + f.n * 8)) { d[k] = 120; d[k + 1] = 80; d[k + 2] = 170; continue; }
+    cnt.fill(0);
+    for (let i = o; i < o + 256 && i < DATA.length; i++) cnt[DATA[i]]++;
+    let ent = 0; for (let v = 0; v < 256; v++) if (cnt[v]) { const q = cnt[v] / 256; ent -= q * Math.log2(q); }
+    if (cnt[255] === 256) { d[k] = 34; d[k + 1] = 48; d[k + 2] = 61; }
+    else if (cnt[0] === 256) { d[k] = d[k + 1] = d[k + 2] = 10; }
+    else { const t = Math.min(1, ent / 6); d[k] = 70 + 150 * t; d[k + 1] = 90 + 110 * t; d[k + 2] = 40 * (1 - t); }
+  }
+  mmBase = id; drawMinimapView();
+}
+function drawMinimapView() {
+  if (!mmBase) return;
+  const ctx = $('#minimap').getContext('2d');
+  ctx.putImageData(mmBase, 0, 0);
+  const b = curBmp(); ctx.fillStyle = 'rgba(79,163,255,.95)';
+  const p0 = Math.floor(b.base / 256), p1 = Math.floor((b.base + b.byteLen - 1) / 256);
+  for (let p = p0; p <= p1; p++) ctx.fillRect(p % 256, Math.floor(p / 256), 1, 1);
+}
+function mmAddr(e) {
+  const c = $('#minimap'), r = c.getBoundingClientRect();
+  const x = Math.floor((e.clientX - r.left) * 256 / r.width), y = Math.floor((e.clientY - r.top) * c.height / r.height);
+  return (y * 256 + x) * 256;
+}
+$('#minimap').addEventListener('mousemove', e => { if (DATA) $('#mmHover').textContent = hex(mmAddr(e)); });
+$('#minimap').addEventListener('click', e => { if (DATA) { setOff(mmAddr(e)); $('#cands').innerHTML = ''; } });
+
+// ---------- Export / import / edit for images ----------
+// Pictures with an alpha plane go to PNG as gray + transparency and come back the same way.
+function picRgbaCanvas(e) {
+  const pl = planes(e), base = picBmp(e, 'base'), L = (1 << pl.b) - 1;
+  const c = document.createElement('canvas'); c.width = e.w; c.height = e.h;
+  const id = new ImageData(e.w, e.h), d = id.data;
+  for (let y = 0; y < e.h; y++) for (let x = 0; x < e.w; x++) {
+    const i = y * e.w + x, k = i * 4, g = Math.round(base.get(x, y) * 255 / L);
+    d[k] = d[k + 1] = d[k + 2] = g; d[k + 3] = getA(DATA, pl, i) * 17;
+  }
+  c.getContext('2d').putImageData(id, 0, 0);
+  return c;
+}
+function exportPicPng(e) {
+  picRgbaCanvas(e).toBlob(b => downloadBlob(b, `pic${TX.table.indexOf(e) + 1}_${hex(e.a).slice(2)}_${e.w}x${e.h}.png`), 'image/png');
+}
+function importPicPng(file, e) {
+  return new Promise((res, rej) => {
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(img.src);
+      if (img.width !== e.w || img.height !== e.h) { rej(new Error(`Размер PNG ${img.width}×${img.height}, а нужно ровно ${e.w}×${e.h}.`)); return; }
+      const c = document.createElement('canvas'); c.width = e.w; c.height = e.h;
+      const ctx = c.getContext('2d'); ctx.drawImage(img, 0, 0);
+      const d = ctx.getImageData(0, 0, e.w, e.h).data, pl = planes(e), base = picBmp(e, 'base'), L = (1 << pl.b) - 1;
+      // The browser stores transparent pixels premultiplied, so colour under low alpha does not
+      // survive a PNG round trip exactly: only pixels that differ from our own export are written.
+      const mine = picRgbaCanvas(e).getContext('2d').getImageData(0, 0, e.w, e.h).data;
+      for (let y = 0; y < e.h; y++) for (let x = 0; x < e.w; x++) {
+        const i = y * e.w + x, k = i * 4;
+        if (d[k] === mine[k] && d[k + 1] === mine[k + 1] && d[k + 2] === mine[k + 2] && d[k + 3] === mine[k + 3]) continue;
+        const a = Math.round(d[k + 3] * 15 / 255);
+        const lum = 0.299 * d[k] + 0.587 * d[k + 1] + 0.114 * d[k + 2];
+        // a 1-bit base is the mask of the alpha plane
+        base.set(x, y, pl.b === 1 ? (a > 0 ? 1 : 0) : Math.round(lum * L / 255));
+        const j = pl.alpha + (i >> 1), sh = (i & 1) * 4; DATA[j] = (DATA[j] & ~(15 << sh)) | (a << sh);
+      }
+      res();
+    };
+    img.onerror = () => rej(new Error('Не удалось прочитать картинку'));
+    img.src = URL.createObjectURL(file);
+  });
+}
+const picHasAlpha = () => PIC && planes(PIC.e).alpha >= 0;
+function syncMask(e) { // keep a 1-bit base equal to "alpha > 0" after editing the alpha plane
+  const pl = planes(e); if (pl.b !== 1 || pl.alpha < 0) return;
+  for (let i = 0; i < pl.px; i++) { const k = e.a + (i >> 3), bit = 1 << (i & 7); DATA[k] = getA(DATA, pl, i) ? DATA[k] | bit : DATA[k] & ~bit; }
+}
+$('#btnExp').onclick = () => {
+  if (!DATA) return;
+  if (picHasAlpha()) { exportPicPng(PIC.e); return; }
+  const b = curBmp();
+  exportPng(b, b.readLevels(), `img_${hex(b.base).slice(2)}_${b.w}x${b.h}_${b.bpp}bpp.png`);
+};
+$('#btnImp').onclick = () => DATA && $('#pngIn').click();
+$('#pngIn').onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  try {
+    if (picHasAlpha()) await importPicPng(f, PIC.e);
+    else { const b = curBmp(); b.writeLevels(await importPng(f, b)); }
+    renderImg(); renderPicGrid(); renderGallery(); updateDirty(); toast('Картинка записана');
+  } catch (err) { toast(err.message, true); }
+};
+$('#btnEdit').onclick = () => {
+  if (!DATA) return;
+  const b = curBmp();
+  if (b.w * b.h > 512 * 512) { toast('Для пиксельного редактора картинка великовата — используйте экспорт/импорт PNG.', true); return; }
+  const e = PIC && PIC.e, alphaPlane = PIC && PIC.plane === 'alpha';
+  const title = e ? `Картинка №${TX.table.indexOf(e) + 1} · ${e.w}×${e.h} · ${alphaPlane ? 'слой прозрачности' : 'изображение'}` : `Картинка ${hex(b.base)} · ${b.w}×${b.h} · ${b.bpp} бит`;
+  openEditor(b, title, () => { if (e && alphaPlane) syncMask(e); renderImg(); renderPicGrid(); renderGallery(); });
+};
+
+// ---------- Firmware picture gallery ----------
+const PIC_GROUPS = [
+  ['all', 'Все', () => true],
+  ['icon', 'Значки', e => e.w <= 64 && e.h <= 64 && e.fmt !== '1+4'],
+  ['big', 'Крупные', e => (e.w > 64 || e.h > 64) && !(e.w === 480 && e.h === 272) && e.fmt !== '1+4'],
+  ['bg', 'Фоны 480×272', e => e.w === 480 && e.h === 272],
+  ['text', 'Надписи', e => e.fmt === '1+4'],
+  ['edit', 'Изменённые', e => picChanged(e)],
+];
+let picGroup = 'all', picPage = 0; const PIC_PER_PAGE = 48;
+function picChanged(e) { const pl = planes(e); for (let i = e.a; i < pl.end; i++) if (DATA[i] !== ORIG[i]) return true; return false; }
+function renderPicGrid() {
+  const panel = $('#picPanel'); panel.hidden = !(DATA && TX.table);
+  if (panel.hidden) return;
+  const chips = $('#picChips'); chips.innerHTML = '';
+  for (const [k, t, f] of PIC_GROUPS) {
+    const n = TX.table.filter(e => e.fmt && f(e)).length; if (!n && k !== picGroup) continue;
+    const c = document.createElement('span'); c.className = 'chip' + (k === picGroup ? ' on' : ''); c.innerHTML = `${t}<span class="n">${n}</span>`;
+    c.onclick = () => { picGroup = k; picPage = 0; renderPicGrid(); }; chips.appendChild(c);
+  }
+  const list = TX.table.filter(e => e.fmt && PIC_GROUPS.find(g => g[0] === picGroup)[2](e));
+  const pages = Math.max(1, Math.ceil(list.length / PIC_PER_PAGE)); picPage = Math.max(0, Math.min(pages - 1, picPage));
+  $('#picPage').textContent = ` ${picPage + 1} / ${pages} `;
+  const grid = $('#picGrid'); grid.innerHTML = '';
+  for (const e of list.slice(picPage * PIC_PER_PAGE, (picPage + 1) * PIC_PER_PAGE)) {
+    const card = document.createElement('div'); card.className = 'card' + (PIC && PIC.e === e ? ' cur' : ''); card.style.padding = '3px';
+    if (picChanged(e)) card.style.borderColor = 'var(--warn)';
+    const th = document.createElement('div'); th.className = 'thumb'; th.style.height = '52px';
+    const c = document.createElement('canvas'); c.width = e.w; c.height = e.h; c.getContext('2d').putImageData(picImageData(e), 0, 0);
+    c.style.maxHeight = '52px'; th.appendChild(c);
+    const meta = document.createElement('div'); meta.className = 'meta mono'; meta.textContent = `№${TX.table.indexOf(e) + 1} ${e.w}×${e.h}`;
+    card.title = `${hex(e.a)} · ${fmtName(e.fmt)}`;
+    card.append(th, meta); card.onclick = () => openPic(e);
+    grid.appendChild(card);
+  }
+}
+$('#picPrev').onclick = () => { picPage--; renderPicGrid(); };
+$('#picNext').onclick = () => { picPage++; renderPicGrid(); };
+
+// ---------- Gallery (saved picture definitions) ----------
+const BM_KEY = 'meterFlashEditor.bookmarks.v2';
+const DEFAULT_BM = [
+  { name: 'Значок топлива', off: 0x43E80, w: 28, h: 28, bpp: 4 },
+  { name: 'Шкала гибрида PWR / ECO / CHG', off: 0x65D94, w: 328, h: 126, bpp: 8 },
+  { name: 'Силуэты автомобиля (область)', off: 0x200000, w: 328, h: 250, bpp: 8 },
+];
+function loadBm() { try { return JSON.parse(localStorage.getItem(BM_KEY)) || DEFAULT_BM.slice(); } catch { return DEFAULT_BM.slice(); } }
+function saveBm() { try { localStorage.setItem(BM_KEY, JSON.stringify(BMS)); } catch {} }
+let BMS = loadBm();
+function renderGallery() {
+  const box = $('#gallery'); box.innerHTML = '';
+  if (!BMS.length) { box.innerHTML = '<div class="hint">Пока пусто. Найдите картинку и нажмите «★ В галерею».</div>'; return; }
+  BMS.forEach((m, i) => {
+    const card = document.createElement('div'); card.className = 'card'; card.dataset.off = m.off;
+    const th = document.createElement('div'); th.className = 'thumb';
+    if (DATA) {
+      const b = new Bmp({ base: m.off, w: m.w, h: m.h, bpp: m.bpp, lsb: m.lsb !== false });
+      th.appendChild(bmpCanvas(b));
+      for (let k = b.base; k < b.base + b.byteLen; k++) if (DATA[k] !== ORIG[k]) { card.style.borderColor = 'var(--warn)'; break; }
+    }
+    const nm = document.createElement('div'); nm.className = 'nm'; nm.textContent = m.name; nm.title = 'Двойной клик — переименовать';
+    const meta = document.createElement('div'); meta.className = 'meta mono'; meta.textContent = `${hex(m.off)} · ${m.w}×${m.h} · ${m.bpp}б`;
+    const x = document.createElement('button'); x.className = 'small x'; x.textContent = '×'; x.title = 'Убрать из галереи';
+    x.onclick = ev => { ev.stopPropagation(); if (confirm(`Убрать «${m.name}» из галереи? (сами данные не меняются)`)) { BMS.splice(i, 1); saveBm(); renderGallery(); } };
+    nm.ondblclick = ev => { ev.stopPropagation(); const n = prompt('Название:', m.name); if (n) { m.name = n; saveBm(); renderGallery(); } };
+    card.append(th, nm, meta, x);
+    card.onclick = () => setView(m);
+    box.appendChild(card);
+  });
+  $$('.card').forEach(el => el.classList.toggle('cur', +el.dataset.off === parseAddr($('#iOff').value)));
+}
+$('#btnBm').onclick = () => {
+  if (!DATA) return;
+  const b = curBmp(), name = prompt('Название картинки:', `Картинка ${hex(b.base)}`);
+  if (!name) return;
+  BMS.push({ name, off: b.base, w: b.w, h: b.h, bpp: b.bpp, lsb: b.lsb }); saveBm(); renderGallery();
+};
+$('#bmExport').onclick = () => downloadBlob(new Blob([JSON.stringify(BMS, null, 1)], { type: 'application/json' }), 'gallery.json');
+$('#bmImport').onclick = () => $('#bmIn').click();
+$('#bmIn').onchange = e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  f.text().then(t => { const a = JSON.parse(t); if (!Array.isArray(a)) throw 0; BMS = a; saveBm(); renderGallery(); toast(`Загружено картинок: ${a.length}`); })
+    .catch(() => toast('Неверный файл списка', true));
+};
+
+// ---------- Pixel editor ----------
+let ED = null;
+function openEditor(bmp, title, onApply, opt = {}) {
+  ED = { bmp, px: bmp.readLevels(), undo: [], color: bmp.levels - 1, onApply, opt, ref: null };
+  $('#edTitle').textContent = title;
+  $('#edZoom').value = Math.max(2, Math.min(32, Math.floor(Math.min(640 / bmp.w, 480 / bmp.h))));
+  const pal = $('#pal'); pal.innerHTML = '';
+  for (let v = 0; v < bmp.levels; v++) {
+    const s = document.createElement('div'); s.className = 'sw'; const g = gray(v, bmp.levels);
+    s.style.background = `rgb(${g},${g},${g})`; s.title = `яркость ${v}`;
+    s.onclick = () => { ED.color = v; markPal(); };
+    pal.appendChild(s);
+  }
+  $('#genPanel').style.display = opt.font ? '' : 'none';
+  if (opt.font) { $('#gChar').value = safeChar(opt.ch); updateRef(); }
+  markPal(); drawEditor(); $('#modal').classList.add('open');
+}
+function markPal() { [...$('#pal').children].forEach((s, i) => s.classList.toggle('sel', i === ED.color)); }
+function drawEditor() {
+  const { bmp, px } = ED, z = +$('#edZoom').value, c = $('#edcanvas'), ctx = c.getContext('2d');
+  c.width = bmp.w * z; c.height = bmp.h * z;
+  ctx.imageSmoothingEnabled = false; ctx.drawImage(bmpCanvas(bmp, px), 0, 0, c.width, c.height);
+  if (ED.ref && $('#gRef').checked) { ctx.globalAlpha = 0.45; ctx.imageSmoothingEnabled = true; ctx.drawImage(ED.ref, 0, 0, c.width, c.height); ctx.globalAlpha = 1; }
+  if ($('#edGrid').checked && z >= 6) {
+    ctx.strokeStyle = 'rgba(79,163,255,.22)'; ctx.lineWidth = 1; ctx.beginPath();
+    for (let x = 0; x <= bmp.w; x++) { ctx.moveTo(x * z + .5, 0); ctx.lineTo(x * z + .5, c.height); }
+    for (let y = 0; y <= bmp.h; y++) { ctx.moveTo(0, y * z + .5); ctx.lineTo(c.width, y * z + .5); }
+    ctx.stroke();
+    if (ED.opt.font) { // baseline and cap height guides
+      const m = fontMetrics(ED.opt.font, genChar()); ctx.strokeStyle = 'rgba(255,179,71,.55)'; ctx.beginPath();
+      ctx.moveTo(0, m.baseline * z + .5); ctx.lineTo(c.width, m.baseline * z + .5);
+      ctx.moveTo(0, m.capTop * z + .5); ctx.lineTo(c.width, m.capTop * z + .5); ctx.stroke();
+    }
+  }
+}
+function edPos(e) { const z = +$('#edZoom').value, r = $('#edcanvas').getBoundingClientRect(); return { x: Math.floor((e.clientX - r.left) / z), y: Math.floor((e.clientY - r.top) / z) }; }
+let painting = false;
+function paint(e) {
+  const p = edPos(e), { bmp, px } = ED;
+  if (p.x < 0 || p.y < 0 || p.x >= bmp.w || p.y >= bmp.h) return;
+  const i = p.y * bmp.w + p.x;
+  if (px[i] !== ED.color) { px[i] = ED.color; drawEditor(); }
+}
+$('#edcanvas').addEventListener('contextmenu', e => e.preventDefault());
+$('#edcanvas').addEventListener('mousedown', e => {
+  if (e.button === 2) { const p = edPos(e); ED.color = ED.px[p.y * ED.bmp.w + p.x]; markPal(); return; }
+  ED.undo.push(ED.px.slice()); painting = true; paint(e);
+});
+$('#edcanvas').addEventListener('mousemove', e => { if (painting) paint(e); });
+window.addEventListener('mouseup', () => painting = false);
+$('#edZoom').oninput = drawEditor; $('#edGrid').onchange = drawEditor;
+$('#edUndo').onclick = () => { if (ED.undo.length) { ED.px = ED.undo.pop(); drawEditor(); } };
+$('#edFill').onclick = () => { ED.undo.push(ED.px.slice()); ED.px.fill(ED.color); drawEditor(); };
+$('#edCancel').onclick = () => { $('#modal').classList.remove('open'); ED = null; };
+$('#edApply').onclick = () => {
+  ED.bmp.writeLevels(ED.px); const cb = ED.onApply;
+  $('#modal').classList.remove('open'); ED = null; cb && cb(); updateDirty();
+};
+$('#edExp').onclick = () => exportPng(ED.bmp, ED.px, `edit_${hex(ED.bmp.base).slice(2)}_${ED.bmp.w}x${ED.bmp.h}.png`);
+$('#edImp').onclick = () => {
+  const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*';
+  inp.onchange = async () => {
+    try { const a = await importPng(inp.files[0], ED.bmp); ED.undo.push(ED.px.slice()); ED.px = a; drawEditor(); }
+    catch (err) { toast(err.message, true); }
+  };
+  inp.click();
+};
+
+// Draw a character with a system font, matched to the meter font's cap height and baseline.
+function renderSystemGlyph(ch, w, h, f, alpha) {
+  const fam = $('#gFam').value, wt = $('#gWt').value, scale = +$('#gSize').value / 100, sx = +$('#gW').value / 100, dy = +$('#gDy').value;
+  const m = fontMetrics(f, ch), capPx = Math.max(4, m.baseline - m.capTop);
+  const probe = document.createElement('canvas').getContext('2d');
+  probe.font = `${wt} 100px "${fam}"`;
+  const capRatio = (probe.measureText('H').actualBoundingBoxAscent || 72) / 100;
+  const size = capPx / capRatio * scale;
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const ctx = c.getContext('2d');
+  if (!alpha) { ctx.fillStyle = '#000'; ctx.fillRect(0, 0, w, h); }
+  ctx.font = `${wt} ${size}px "${fam}"`; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+  ctx.fillStyle = alpha ? '#ff5050' : '#fff';
+  ctx.translate(w / 2, 0); ctx.scale(sx, 1);
+  ctx.fillText(String.fromCodePoint(ch), 0, m.baseline + dy);
+  return c;
+}
+function genChar() { const s = $('#gChar').value; return s ? s.codePointAt(0) : ED.opt.ch; }
+function updateRef() {
+  if (!ED || !ED.opt.font) return;
+  $('#gSizeV').textContent = $('#gSize').value + '%'; $('#gWV').textContent = $('#gW').value + '%'; $('#gDyV').textContent = $('#gDy').value;
+  ED.ref = renderSystemGlyph(genChar(), ED.bmp.w, ED.bmp.h, ED.opt.font, true);
+  drawEditor();
+}
+['#gFam', '#gWt', '#gSize', '#gW', '#gDy', '#gChar', '#gRef'].forEach(s => $(s).addEventListener('input', updateRef));
+$('#gApply').onclick = () => {
+  const { bmp } = ED, c = renderSystemGlyph(genChar(), bmp.w, bmp.h, ED.opt.font, false);
+  ED.undo.push(ED.px.slice());
+  ED.px = rgbaToLevels(c.getContext('2d').getImageData(0, 0, bmp.w, bmp.h).data, bmp.w * bmp.h, bmp.levels);
+  drawEditor();
+};
+
+// ---------- Text messages: picture table from the meter CPU firmware ----------
+// The CPU firmware lists every picture of this flash as (address, width, height, flags).
+// Flags 0x0101 add a 4-bit alpha plane after the base plane (base plane padded to 4 bytes).
+// Text messages are a 1-bit mask plus a 4-bit alpha plane; the mask is simply alpha > 0.
+// Pixels follow each other without row padding, low bits first.
+const PRESETS = { "838001AL7002": {"model":"838001AL7002","mcu":"83800-1AL70","table":[[131104,480,272,256,"1"],[147424,480,272,0,"8"],[277984,28,18,256,"1"],[278048,28,27,257,"1+4"],[278524,32,26,257,"1+4"],[279044,20,10,257,"4+4"],[279244,16,7,257,"4+4"],[279356,16,6,257,"4+4"],[279452,36,36,257,"4+4"],[280748,256,36,257,"4+4"],[289964,296,39,257,"8+4"],[307280,172,37,257,"2+4"],[312056,40,40,257,"1+4"],[313056,88,182,257,"8+4"],[337080,88,183,257,"8+4"],[361252,128,40,256,"1"],[361892,128,40,256,"4"],[364452,264,84,257,"2+4"],[381084,108,40,256,"4"],[383244,64,40,256,"4"],[384524,112,27,257,"1+4"],[386416,24,52,257,"4+4"],[387664,36,53,257,"4+4"],[389576,44,53,257,"4+4"],[391912,48,54,257,"4+4"],[394504,24,52,257,"4+4"],[395752,36,53,257,"4+4"],[397664,44,53,257,"4+4"],[400000,48,54,257,"4+4"],[402592,24,47,257,"4+4"],[403720,36,48,257,"4+4"],[405448,44,48,257,"4+4"],[407560,52,49,257,"4+4"],[410112,24,47,257,"4+4"],[411240,36,48,257,"4+4"],[412968,44,48,257,"4+4"],[415080,52,49,257,"4+4"],[417632,328,126,256,"8"],[458960,36,50,257,"4+4"],[460760,36,50,257,"4+4"],[462560,36,50,257,"4+4"],[464360,36,50,257,"4+4"],[466160,36,50,257,"4+4"],[467960,36,50,257,"4+4"],[469760,36,50,257,"4+4"],[471560,36,50,257,"4+4"],[473360,48,73,256,"8"],[476864,40,2,257,"4+4"],[476944,40,3,257,"4+4"],[477064,40,3,257,"4+4"],[477184,40,4,257,"4+4"],[477344,40,4,257,"4+4"],[477504,40,5,257,"4+4"],[477704,40,5,257,"4+4"],[477904,40,6,257,"4+4"],[478144,40,7,257,"4+4"],[478424,40,8,257,"4+4"],[478744,40,9,257,"4+4"],[479104,40,9,257,"4+4"],[479464,40,10,257,"4+4"],[479864,40,11,257,"4+4"],[480304,40,11,257,"4+4"],[480744,40,11,257,"4+4"],[481184,40,12,257,"4+4"],[481664,40,13,257,"4+4"],[482184,40,14,257,"4+4"],[482744,40,15,257,"4+4"],[483344,40,15,257,"4+4"],[483944,40,16,257,"4+4"],[484584,40,17,257,"4+4"],[485264,40,18,257,"4+4"],[485984,40,18,257,"4+4"],[486704,40,19,257,"4+4"],[487464,40,19,257,"4+4"],[488224,40,20,257,"4+4"],[489024,40,20,257,"4+4"],[489824,40,21,257,"4+4"],[490664,40,22,257,"4+4"],[491544,40,23,257,"4+4"],[492464,40,24,257,"4+4"],[493424,40,24,257,"4+4"],[494384,40,25,257,"4+4"],[495384,40,26,257,"4+4"],[496424,40,26,257,"4+4"],[497464,40,26,257,"4+4"],[498504,40,27,257,"4+4"],[499584,40,28,257,"4+4"],[500704,40,29,257,"4+4"],[501864,40,30,257,"4+4"],[503064,40,30,257,"4+4"],[504264,40,31,257,"4+4"],[505504,40,32,257,"4+4"],[506784,40,33,257,"4+4"],[508104,40,33,257,"4+4"],[509424,40,34,257,"4+4"],[510784,40,34,257,"4+4"],[512144,40,35,257,"4+4"],[513544,40,2,257,"4+4"],[513624,44,3,257,"4+4"],[513760,44,4,257,"4+4"],[513936,44,5,257,"4+4"],[514160,44,6,257,"4+4"],[514424,48,6,257,"4+4"],[514712,48,8,257,"4+4"],[515096,48,9,257,"4+4"],[515528,48,10,257,"4+4"],[516008,48,11,257,"4+4"],[516536,48,12,257,"4+4"],[517112,52,13,257,"4+4"],[517792,52,14,257,"4+4"],[518520,52,16,257,"4+4"],[519352,56,17,257,"4+4"],[520304,56,18,257,"4+4"],[521312,56,19,257,"4+4"],[522376,56,19,257,"4+4"],[523440,60,21,257,"4+4"],[524704,60,22,257,"4+4"],[526024,60,23,257,"4+4"],[527408,60,24,257,"4+4"],[528848,64,25,257,"4+4"],[530448,64,26,257,"4+4"],[532112,64,27,257,"4+4"],[533840,68,29,257,"4+4"],[535816,68,30,257,"4+4"],[537856,68,31,257,"4+4"],[539968,72,32,257,"4+4"],[542272,72,33,257,"4+4"],[544648,76,34,257,"4+4"],[547232,76,35,257,"4+4"],[549896,76,36,257,"4+4"],[552632,80,37,257,"4+4"],[555592,80,38,257,"4+4"],[558632,80,39,257,"4+4"],[561752,84,40,257,"4+4"],[565112,84,41,257,"4+4"],[568560,84,42,257,"4+4"],[572088,88,42,257,"4+4"],[575784,88,43,257,"4+4"],[579568,92,44,257,"4+4"],[583616,92,45,257,"4+4"],[587760,96,46,257,"4+4"],[592176,96,47,257,"4+4"],[596688,100,48,257,"4+4"],[601488,100,48,257,"4+4"],[606288,100,49,257,"4+4"],[611192,104,50,257,"4+4"],[616392,104,50,257,"4+4"],[621592,24,10,257,"4+4"],[621832,24,10,257,"4+4"],[622072,28,11,257,"4+4"],[622384,28,11,257,"4+4"],[622696,28,12,257,"4+4"],[623032,32,12,257,"4+4"],[623416,32,12,257,"4+4"],[623800,32,13,257,"4+4"],[624216,36,13,257,"4+4"],[624688,36,13,257,"4+4"],[625160,36,14,257,"4+4"],[625664,40,14,257,"4+4"],[626224,40,15,257,"4+4"],[626824,40,15,257,"4+4"],[627424,44,15,257,"4+4"],[628088,44,16,257,"4+4"],[628792,44,16,257,"4+4"],[629496,48,16,257,"4+4"],[630264,48,16,257,"4+4"],[631032,52,17,257,"4+4"],[631920,52,17,257,"4+4"],[632808,52,17,257,"4+4"],[633696,56,18,257,"4+4"],[634704,56,18,257,"4+4"],[635712,60,18,257,"4+4"],[636792,60,18,257,"4+4"],[637872,60,18,257,"4+4"],[638952,64,19,257,"4+4"],[640168,64,19,257,"4+4"],[641384,68,19,257,"4+4"],[642680,68,19,257,"4+4"],[643976,72,19,257,"4+4"],[645344,72,20,257,"4+4"],[646784,72,20,257,"4+4"],[648224,76,20,257,"4+4"],[649744,76,20,257,"4+4"],[651264,80,20,257,"4+4"],[652864,80,20,257,"4+4"],[654464,80,21,257,"4+4"],[656144,84,21,257,"4+4"],[657912,84,21,257,"4+4"],[659680,88,21,257,"4+4"],[661528,88,21,257,"4+4"],[663376,92,21,257,"4+4"],[665312,92,21,257,"4+4"],[667248,96,21,257,"4+4"],[669264,96,21,257,"4+4"],[671280,96,21,257,"4+4"],[673296,100,21,257,"4+4"],[675400,100,21,257,"4+4"],[677504,52,30,257,"4+4"],[679064,16,8,257,"4+4"],[679192,28,8,257,"4+4"],[679416,40,8,257,"4+4"],[679736,52,8,257,"4+4"],[680152,64,8,257,"4+4"],[680664,40,20,257,"4+4"],[681464,128,55,257,"4+4"],[688504,28,11,257,"4+4"],[688816,56,11,257,"4+4"],[689432,80,11,257,"4+4"],[690312,104,11,257,"4+4"],[691456,128,11,257,"4+4"],[692864,104,115,257,"4+4"],[704824,104,100,257,"4+4"],[715224,104,85,257,"4+4"],[724064,48,142,256,"8"],[730880,316,20,256,"1"],[744860,280,141,256,"2"],[754732,44,152,257,"1+4"],[758912,160,41,257,"4+4"],[765472,104,87,257,"8+4"],[779044,104,87,257,"8+4"],[792616,100,87,257,"8+4"],[805668,96,85,257,"8+4"],[817908,96,85,257,"8+4"],[830148,96,85,257,"8+4"],[842388,96,81,257,"8+4"],[854052,100,77,257,"8+4"],[865604,96,85,257,"8+4"],[877844,100,85,257,"8+4"],[890596,100,85,257,"8+4"],[903348,100,85,257,"8+4"],[916100,100,83,257,"8+4"],[928552,100,83,257,"8+4"],[941004,100,79,257,"8+4"],[952856,92,75,257,"8+4"],[963208,156,30,257,"8+4"],[970228,156,29,257,"8+4"],[977016,156,29,257,"8+4"],[983804,156,29,257,"8+4"],[990592,156,29,257,"8+4"],[997380,152,29,257,"8+4"],[1003992,152,29,257,"8+4"],[1010604,148,29,257,"8+4"],[1017044,96,89,257,"8+4"],[1029860,100,89,257,"8+4"],[1043212,104,89,257,"8+4"],[1057096,104,89,257,"8+4"],[1070980,100,87,257,"8+4"],[1084032,100,85,257,"8+4"],[1096784,100,81,257,"8+4"],[1108936,96,77,257,"8+4"],[1120024,48,9,257,"4+4"],[1120456,48,16,257,"4+4"],[1121224,48,25,257,"4+4"],[1122424,48,33,257,"4+4"],[1124008,48,41,257,"4+4"],[1125976,48,49,257,"4+4"],[1128328,48,57,257,"4+4"],[1131064,48,66,257,"4+4"],[1134232,64,102,256,"8"],[1140760,76,97,256,"8"],[1148132,64,70,256,"8"],[1152612,64,70,256,"8"],[1157092,48,27,257,"1+4"],[1157920,128,40,256,"1"],[1158560,128,40,256,"4"],[1161120,248,29,256,"8"],[1170272,16,23,257,"4+4"],[1170640,16,23,257,"4+4"],[1171008,28,30,257,"1+4"],[1171536,36,35,257,"1+4"],[1172348,160,40,256,"1"],[1173148,160,40,256,"1"],[1176368,160,40,256,"4"],[1179568,56,18,257,"4+4"],[1180576,28,141,257,"4+4"],[1192448,264,144,257,"2+4"],[1220960,36,154,257,"1+4"],[1224428,192,16,257,"1+4"],[1226348,312,40,256,"1"],[1227908,312,40,256,"4"],[1234148,84,46,257,"8+4"],[1243988,84,46,257,"8+4"],[1253828,84,46,257,"8+4"],[1263668,48,141,257,"4+4"],[1294228,36,154,257,"1+4"],[1297696,312,110,257,"8+4"],[1363380,308,108,257,"8+4"],[1425300,100,30,257,"1+4"],[1428496,16,36,256,"4"],[1429496,16,36,256,"4"],[1430496,16,59,256,"4"],[1431496,16,56,256,"4"],[1432496,16,59,256,"4"],[1433496,16,82,256,"4"],[1434496,16,79,256,"4"],[1435496,16,79,256,"4"],[1436496,16,82,256,"4"],[1437496,16,105,256,"4"],[1438496,16,102,256,"4"],[1439496,16,102,256,"4"],[1440496,16,102,256,"4"],[1441496,16,105,256,"4"],[1443496,16,125,256,"4"],[1444496,16,125,256,"4"],[1445496,16,125,256,"4"],[1446496,16,125,256,"8"],[1448496,44,27,257,"1+4"],[1449244,24,23,257,"1+4"],[1449592,104,50,256,"8"],[1454792,104,50,256,"4"],[1457392,44,27,257,"1+4"],[1458140,16,165,256,"4"],[1459460,8,1,256,"4"],[1459464,8,2,256,"4"],[1459472,8,3,256,"4"],[1459484,8,4,256,"4"],[1459500,8,5,256,"4"],[1459520,8,6,256,"4"],[1459544,8,7,256,"4"],[1459572,8,8,256,"4"],[1459604,8,9,256,"4"],[1459640,8,10,256,"4"],[1459680,20,9,257,"1+4"],[1459796,24,10,257,"1+4"],[1459948,20,10,257,"1+4"],[1460076,24,10,257,"1+4"],[1460228,316,38,256,"4"],[1466232,88,84,257,"2+4"],[1471776,84,40,256,"4"],[1473456,48,45,256,"8"],[1475616,48,45,256,"8"],[1477776,48,45,256,"8"],[1479936,48,45,256,"8"],[1482096,48,45,256,"8"],[1484256,48,45,256,"8"],[1486416,48,45,256,"8"],[1488576,48,45,256,"8"],[1490736,292,69,256,"8"],[1520960,24,32,257,"4+4"],[1521728,24,32,257,"4+4"],[1522496,172,39,257,"4+4"],[1529208,280,83,257,"4+4"],[1552448,40,36,257,"4+4"],[1553888,32,17,257,"1+4"],[1554228,36,20,257,"4+4"],[1554948,16,15,257,"1+4"],[1555100,340,213,256,"1"],[1564156,12,26,257,"1+4"],[1564352,16,32,257,"4+4"],[1564864,272,46,256,"4"],[1571120,40,36,256,"4"],[1571840,40,36,256,"4"],[1572560,40,36,256,"4"],[1573280,40,36,256,"4"],[1574000,40,36,256,"4"],[1574720,40,36,256,"4"],[1575440,272,31,256,"4"],[1579656,164,31,256,"4"],[1582200,272,31,256,"4"],[1586416,272,31,256,"4"],[1590632,272,31,256,"4"],[1594848,272,31,256,"4"],[1599064,164,31,256,"4"],[1601608,272,31,256,"4"],[1605824,272,31,256,"4"],[1610040,164,31,256,"4"],[1612584,272,31,256,"4"],[1616800,272,31,256,"4"],[1621016,272,31,256,"4"],[1625232,272,31,256,"4"],[1629448,164,31,256,"4"],[1631992,272,31,256,"4"],[1636208,28,26,257,"1+4"],[1636664,32,32,257,"4+4"],[1637688,28,29,257,"1+4"],[1638200,56,21,257,"1+4"],[1638936,60,27,257,"1+4"],[1639972,144,40,256,"4"],[1642852,204,33,256,"1"],[1643696,248,33,256,"1"],[1644720,480,272,256,"1"],[1661040,340,208,256,"1"],[1669880,320,142,256,"2"],[1681240,272,113,256,"1"],[1685084,316,38,256,"4"],[1691088,340,208,256,"1"],[1699928,320,124,256,"1"],[1704888,480,272,256,"1"],[1721208,480,272,0,"4"],[1789728,316,165,256,"1"],[1796248,340,208,256,"4"],[1831608,68,44,257,"1+4"],[1833480,80,44,257,"1+4"],[1835680,56,50,257,"1+4"],[1837432,100,37,257,"1+4"],[1841504,8,13,257,"1+4"],[1841572,12,16,257,"1+4"],[1841692,12,16,257,"1+4"],[1841812,12,16,257,"1+4"],[1841932,16,22,257,"1+4"],[1842152,20,25,257,"1+4"],[1842468,20,27,257,"1+4"],[1842808,20,27,257,"1+4"],[1843148,24,30,257,"1+4"],[1843600,32,40,257,"1+4"],[1844400,28,40,257,"1+4"],[1845100,52,68,257,"1+4"],[1847312,8,13,257,"1+4"],[1847380,12,16,257,"1+4"],[1847500,12,16,257,"1+4"],[1847620,12,16,257,"1+4"],[1847740,16,22,257,"1+4"],[1847960,20,25,257,"1+4"],[1848276,20,27,257,"1+4"],[1848616,20,27,257,"1+4"],[1848956,24,30,257,"1+4"],[1849408,32,40,257,"1+4"],[1850208,28,40,257,"1+4"],[1850908,52,68,257,"1+4"],[1853120,8,13,257,"1+4"],[1853188,12,16,257,"1+4"],[1853308,12,16,257,"1+4"],[1853428,12,16,257,"1+4"],[1853548,16,22,257,"1+4"],[1853768,20,25,257,"1+4"],[1854084,20,27,257,"1+4"],[1854424,20,27,257,"1+4"],[1854764,24,30,257,"1+4"],[1855216,32,40,257,"1+4"],[1856016,28,40,257,"1+4"],[1856716,52,68,257,"1+4"],[1858928,8,13,257,"1+4"],[1858996,12,16,257,"1+4"],[1859116,12,16,257,"1+4"],[1859236,12,16,257,"1+4"],[1859356,16,22,257,"1+4"],[1859576,20,25,257,"1+4"],[1859892,20,27,257,"1+4"],[1860232,20,27,257,"1+4"],[1860572,24,30,257,"1+4"],[1861024,32,40,257,"1+4"],[1861824,28,40,257,"1+4"],[1862524,52,68,257,"1+4"],[1864736,8,13,257,"1+4"],[1864804,12,16,257,"1+4"],[1864924,12,16,257,"1+4"],[1865044,12,16,257,"1+4"],[1865164,16,22,257,"1+4"],[1865384,20,25,257,"1+4"],[1865700,20,27,257,"1+4"],[1866040,20,27,257,"1+4"],[1866380,24,30,257,"1+4"],[1866832,32,40,257,"1+4"],[1867632,28,40,257,"1+4"],[1868332,52,68,257,"1+4"],[1870544,8,13,257,"1+4"],[1870612,12,16,257,"1+4"],[1870732,12,16,257,"1+4"],[1870852,12,16,257,"1+4"],[1870972,16,22,257,"1+4"],[1871192,20,25,257,"1+4"],[1871508,20,27,257,"1+4"],[1871848,20,27,257,"1+4"],[1872188,24,30,257,"1+4"],[1872640,32,40,257,"1+4"],[1873440,28,40,257,"1+4"],[1874140,52,68,257,"1+4"],[1876352,8,13,257,"1+4"],[1876420,12,16,257,"1+4"],[1876540,12,16,257,"1+4"],[1876660,12,16,257,"1+4"],[1876780,16,22,257,"1+4"],[1877000,20,25,257,"1+4"],[1877316,20,27,257,"1+4"],[1877656,20,27,257,"1+4"],[1877996,24,30,257,"1+4"],[1878448,32,40,257,"1+4"],[1879248,28,40,257,"1+4"],[1879948,52,68,257,"1+4"],[1882160,8,13,257,"1+4"],[1882228,12,16,257,"1+4"],[1882348,12,16,257,"1+4"],[1882468,12,16,257,"1+4"],[1882588,16,22,257,"1+4"],[1882808,20,25,257,"1+4"],[1883124,20,27,257,"1+4"],[1883464,20,27,257,"1+4"],[1883804,24,30,257,"1+4"],[1884256,32,40,257,"1+4"],[1885056,28,40,257,"1+4"],[1885756,52,68,257,"1+4"],[1887968,8,13,257,"1+4"],[1888036,12,16,257,"1+4"],[1888156,12,16,257,"1+4"],[1888276,12,16,257,"1+4"],[1888396,16,22,257,"1+4"],[1888616,20,25,257,"1+4"],[1888932,20,27,257,"1+4"],[1889272,20,27,257,"1+4"],[1889612,24,30,257,"1+4"],[1890064,32,40,257,"1+4"],[1890864,28,40,257,"1+4"],[1891564,52,68,257,"1+4"],[1893776,8,13,257,"1+4"],[1893844,12,16,257,"1+4"],[1893964,12,16,257,"1+4"],[1894084,12,16,257,"1+4"],[1894204,16,22,257,"1+4"],[1894424,20,25,257,"1+4"],[1894740,20,27,257,"1+4"],[1895080,20,27,257,"1+4"],[1895420,24,30,257,"1+4"],[1895872,32,40,257,"1+4"],[1896672,28,40,257,"1+4"],[1897372,52,68,257,"1+4"],[1899584,8,26,257,"1+4"],[1899716,8,26,257,"1+4"],[1899848,20,25,257,"1+4"],[1900164,20,27,257,"1+4"],[1900504,32,40,257,"1+4"],[1901304,20,26,257,"1+4"],[1901632,28,39,257,"1+4"],[1902320,4,2,256,"4"],[1902324,4,2,256,"4"],[1902328,4,3,257,"1+4"],[1902340,4,4,257,"1+4"],[1902352,28,16,257,"1+4"],[1902632,24,16,257,"1+4"],[1902872,16,22,257,"1+4"],[1903092,12,20,257,"1+4"],[1903244,24,17,257,"1+4"],[1903500,20,15,257,"1+4"],[1903692,28,17,257,"1+4"],[1903992,32,20,257,"1+4"],[1904392,56,27,257,"1+4"],[1905340,48,27,257,"1+4"],[1906152,36,17,257,"1+4"],[1906540,48,27,257,"1+4"],[1907352,68,32,257,"1+4"],[1908712,56,31,257,"1+4"],[1909800,20,17,257,"1+4"],[1910016,44,14,257,"1+4"],[1910404,64,19,257,"1+4"],[1911164,68,21,257,"1+4"],[1912060,24,17,257,"1+4"],[1912316,28,13,257,"1+4"],[1912548,40,18,257,"1+4"],[1913000,48,21,257,"1+4"],[1913632,20,14,257,"1+4"],[1913808,32,13,257,"1+4"],[1914068,48,21,257,"1+4"],[1914700,56,20,257,"1+4"],[1915400,48,20,257,"1+4"],[1916000,20,17,257,"1+4"],[1916216,16,16,257,"1+4"],[1916376,28,31,257,"1+4"],[1916924,28,30,257,"1+4"],[1917452,24,21,257,"1+4"],[1917768,16,20,257,"1+4"],[1917968,20,24,257,"1+4"],[1918268,56,32,257,"1+4"],[1919388,52,31,257,"1+4"],[1920400,20,18,257,"1+4"],[1920628,4,3,257,"1+4"],[1920640,12,24,257,"1+4"],[1920820,36,17,257,"1+4"],[1921208,328,188,256,"4"],[1952040,312,124,256,"1"],[1956876,36,192,257,"4+4"],[1963788,16,128,256,"4"],[1964812,16,128,256,"4"],[1965836,28,186,256,"4"],[1968440,40,36,257,"4+4"],[1969880,8,36,257,"4+4"],[1970168,40,36,257,"4+4"],[1971608,16,36,257,"4+4"],[1972184,32,36,257,"4+4"],[1973336,24,36,257,"4+4"],[1974200,24,36,257,"4+4"],[1975064,32,36,257,"4+4"],[1976216,16,36,257,"4+4"],[1976792,36,36,257,"4+4"],[1978088,8,36,257,"4+4"],[1978376,40,36,257,"4+4"],[1979816,12,19,257,"1+4"],[1979964,16,22,257,"1+4"],[1980184,12,19,257,"1+4"],[1980332,16,22,257,"1+4"],[1980552,12,19,257,"1+4"],[1980700,16,22,257,"1+4"],[1980920,12,19,257,"1+4"],[1981068,16,22,257,"1+4"],[1981288,12,19,257,"1+4"],[1981436,16,22,257,"1+4"],[1981656,12,19,257,"1+4"],[1981804,16,22,257,"1+4"],[1982024,12,19,257,"1+4"],[1982172,16,22,257,"1+4"],[1982392,12,19,257,"1+4"],[1982540,16,22,257,"1+4"],[1982760,12,19,257,"1+4"],[1982908,16,22,257,"1+4"],[1983128,12,19,257,"1+4"],[1983276,16,22,257,"1+4"],[1983496,132,83,256,"2"],[1986236,132,83,256,"2"],[1988976,160,83,256,"2"],[1992296,148,83,256,"2"],[1995368,160,83,256,"2"],[1998688,200,13,257,"4+4"],[2001288,184,16,257,"1+4"],[2003128,48,27,257,"1+4"],[2003940,160,40,256,"4"],[2007140,160,40,256,"1"],[2007940,160,83,256,"1"],[2014140,312,42,256,"1"],[2017212,56,31,257,"4+4"],[2018948,248,60,256,"4"],[2026388,28,28,257,"4+4"],[2027172,32,30,257,"1+4"],[2027772,32,30,257,"1+4"],[2028372,256,25,256,"4"],[2031572,140,25,257,"4+4"],[2035076,164,25,257,"8+4"],[2041228,248,121,257,"2+4"],[2063736,128,40,256,"4"],[2066296,128,40,256,"1"],[2066936,132,83,256,"2"],[2069676,128,40,256,"4"],[2072236,128,40,256,"1"],[2072876,132,83,256,"2"],[2075616,144,40,256,"4"],[2078496,144,40,256,"1"],[2079216,148,124,256,"2"],[2083804,52,54,257,"1+4"],[2085560,328,95,256,"8"],[2116720,328,96,256,"8"],[2148208,328,96,256,"8"],[2179696,236,84,257,"8+4"],[2209432,160,93,256,"8"],[2224312,160,99,256,"8"],[2240152,92,108,256,"8"],[2250088,100,128,257,"1+4"],[2258088,108,138,257,"1+4"],[2267404,108,138,257,"1+4"],[2276720,100,128,257,"1+4"],[2284720,108,137,257,"1+4"],[2293972,108,137,257,"1+4"],[2303224,280,85,257,"4+4"],[2327024,272,46,256,"4"],[2333280,44,50,257,"4+4"],[2335480,272,31,256,"4"],[2339696,300,145,257,"1+4"],[2378784,24,26,257,"1+4"],[2379176,28,32,257,"4+4"],[2380072,40,36,256,"4"],[2380792,40,36,256,"4"],[2381512,40,36,257,"4+4"],[2382952,8,36,257,"4+4"],[2383240,40,36,257,"4+4"],[2384680,16,36,257,"4+4"],[2385256,32,36,257,"4+4"],[2386408,24,36,257,"4+4"],[2387272,24,36,257,"4+4"],[2388136,32,36,257,"4+4"],[2389288,16,36,257,"4+4"],[2389864,36,36,257,"4+4"],[2391160,8,36,257,"4+4"],[2391448,40,36,257,"4+4"],[2392888,36,22,257,"1+4"],[2393384,64,137,257,"8+4"],[2406536,68,136,257,"8+4"],[2420524,24,14,257,"1+4"],[2421284,24,14,257,"1+4"],[2425536,24,29,257,"1+4"],[2425972,52,25,257,"1+4"],[2426788,36,22,257,"1+4"],[2427284,8,17,257,"1+4"],[2427372,12,18,257,"1+4"],[2427508,12,19,257,"1+4"],[2427656,312,83,256,"1"],[2430896,56,29,257,"1+4"],[2431912,104,50,256,"4"],[2434512,104,50,256,"8"],[2439712,60,32,256,"1"],[2439952,312,40,256,"4"],[2446192,96,145,257,"8+4"],[2467072,96,145,257,"8+4"],[2487952,96,145,257,"8+4"],[2508832,96,145,257,"8+4"],[2529712,52,42,257,"8+4"],[2532988,40,47,257,"8+4"],[2535808,28,51,257,"8+4"],[2537952,52,42,257,"8+4"],[2541228,40,47,257,"8+4"],[2544048,28,51,257,"8+4"],[2546192,52,42,257,"8+4"],[2549468,40,47,257,"8+4"],[2552288,28,51,257,"8+4"],[2554432,52,42,257,"8+4"],[2557708,40,47,257,"8+4"],[2560528,28,51,257,"8+4"],[2562672,60,50,257,"8+4"],[2567172,48,52,257,"8+4"],[2570916,36,57,257,"8+4"],[2573996,56,50,257,"8+4"],[2578196,48,53,257,"8+4"],[2582012,32,55,257,"8+4"],[2584652,60,50,257,"8+4"],[2589152,48,52,257,"8+4"],[2592896,36,57,257,"8+4"],[2595976,56,50,257,"8+4"],[2600176,48,53,257,"8+4"],[2603992,32,55,257,"8+4"],[2606632,84,70,257,"8+4"],[2615452,88,47,257,"8+4"],[2621656,84,41,257,"8+4"],[2626824,104,75,257,"8+4"],[2638524,100,69,257,"8+4"],[2648876,92,70,257,"8+4"],[2658536,324,95,257,"8+4"],[2704708,324,95,257,"8+4"],[2750880,324,95,257,"8+4"],[2797052,16,10,257,"4+4"],[2797212,32,19,257,"1+4"],[2797592,16,10,257,"4+4"],[2797752,32,19,257,"1+4"],[2798132,20,12,257,"1+4"],[2798284,32,20,257,"1+4"],[2798684,40,25,257,"1+4"],[2799312,20,12,257,"1+4"],[2799464,32,20,257,"1+4"],[2799864,40,25,257,"1+4"],[2800492,48,6,257,"4+4"],[2800780,48,10,257,"1+4"],[2801080,48,14,257,"1+4"],[2801500,48,16,257,"1+4"],[2801980,64,8,257,"1+4"],[2802300,68,14,257,"1+4"],[2802896,68,19,257,"1+4"],[2803708,68,23,257,"1+4"],[2804688,20,19,257,"1+4"],[2804928,4,12,257,"1+4"],[3342372,228,26,257,"1+4"],[3346080,232,60,257,"1+4"],[3354780,252,61,257,"1+4"],[3364392,164,26,257,"1+4"],[3367060,252,61,257,"1+4"],[3376672,288,61,257,"1+4"],[3387652,120,21,257,"1+4"],[3389228,132,22,257,"1+4"],[3391044,44,21,257,"1+4"],[3391624,156,22,257,"1+4"],[3393772,132,21,257,"1+4"],[3395508,192,22,257,"1+4"],[3398148,68,38,257,"1+4"],[3400576,172,22,257,"1+4"],[3402944,196,21,257,"1+4"],[3405520,196,20,257,"1+4"],[3407972,152,20,257,"1+4"],[3409872,176,21,257,"1+4"],[3412184,236,22,257,"1+4"],[3415432,240,84,257,"1+4"],[3428032,140,23,257,"1+4"],[3430060,168,54,257,"1+4"],[3435732,268,53,257,"1+4"],[3444612,268,53,257,"1+4"],[3453492,268,54,257,"1+4"],[3462540,152,53,257,"1+4"],[3514336,196,52,257,"1+4"],[3520708,84,23,257,"1+4"],[3521920,104,21,257,"1+4"],[3542680,252,55,257,"1+4"],[3551348,248,53,257,"1+4"],[3559564,256,23,257,"1+4"],[3563244,240,116,257,"1+4"],[3580644,244,40,257,"1+4"],[3586744,44,22,257,"1+4"],[3587584,256,22,257,"1+4"],[3591104,200,117,257,"1+4"],[3605732,240,84,257,"1+4"],[3618420,236,22,257,"1+4"],[3621668,152,53,257,"1+4"],[3626704,240,83,257,"1+4"],[3639156,160,23,257,"1+4"],[3641456,56,26,257,"1+4"],[3642396,164,54,257,"1+4"],[3647932,180,23,257,"1+4"],[3650524,248,52,257,"1+4"],[3658584,200,22,257,"1+4"],[3661336,220,23,257,"1+4"],[3664504,108,22,257,"1+4"],[3665992,220,54,257,"1+4"],[3673560,108,22,257,"1+4"],[3675048,228,84,257,"2+4"],[3690012,240,83,257,"1+4"],[3702464,84,17,257,"1+4"],[3703868,200,54,257,"1+4"],[3710620,104,25,257,"1+4"],[3722340,256,24,257,"1+4"],[3726288,32,17,257,"1+4"],[3726628,32,17,257,"1+4"],[3726968,96,19,257,"1+4"],[3728108,36,17,257,"1+4"],[3728496,36,17,257,"1+4"],[3728884,224,21,257,"1+4"],[3731824,72,27,257,"1+4"],[3733040,68,27,257,"1+4"],[3734192,164,27,257,"1+4"],[3736964,112,27,257,"1+4"],[3738856,192,25,257,"1+4"],[3741856,176,29,257,"1+4"],[3745048,116,28,257,"1+4"],[3747080,180,25,257,"1+4"],[3749896,44,21,257,"1+4"],[3750592,76,29,257,"1+4"],[3751972,72,29,257,"1+4"],[3753280,84,27,257,"1+4"],[3754700,204,28,257,"1+4"],[3758272,232,61,257,"1+4"],[3767120,200,62,257,"1+4"],[3774872,96,27,257,"1+4"],[3776492,52,27,257,"1+4"],[3777372,168,27,257,"1+4"],[3780208,112,23,257,"1+4"],[3782100,56,27,257,"1+4"],[3783048,36,19,257,"1+4"],[3783480,44,19,257,"1+4"],[3784008,36,19,257,"1+4"],[3784440,44,21,257,"1+4"],[3785020,44,19,257,"1+4"],[3785548,44,19,257,"1+4"],[3786304,76,25,257,"1+4"],[3787496,88,25,257,"1+4"],[3788872,180,23,257,"1+4"],[3791464,156,26,257,"1+4"],[3794000,124,26,257,"1+4"],[3796016,64,22,257,"1+4"],[3796940,48,25,257,"1+4"],[3797692,232,62,257,"1+4"],[3806684,32,15,257,"1+4"],[3806984,32,15,257,"1+4"],[3807284,64,17,257,"1+4"],[3807964,80,16,257,"1+4"],[3808764,32,15,257,"1+4"],[3809064,32,15,257,"1+4"],[3809364,32,15,257,"1+4"],[3809664,148,21,257,"1+4"],[3811612,148,21,257,"1+4"],[3813560,116,22,257,"1+4"],[3815156,120,22,257,"1+4"],[3816808,116,22,257,"1+4"],[3818404,120,22,257,"1+4"],[3820056,76,18,257,"1+4"],[3820912,76,19,257,"1+4"],[3821820,76,19,257,"1+4"],[3822728,40,19,257,"1+4"],[3823204,76,19,257,"1+4"],[3824112,100,26,257,"1+4"],[3825740,128,26,257,"1+4"],[3827820,52,25,257,"1+4"],[3828636,52,25,257,"1+4"],[3829452,52,25,257,"1+4"],[3830268,104,26,257,"1+4"],[3831960,88,22,257,"1+4"],[3833172,56,22,257,"1+4"],[3833944,56,22,257,"1+4"],[3834716,72,38,257,"1+4"],[3837248,92,39,257,"1+4"],[3840424,32,15,257,"1+4"],[3840724,36,18,257,"1+4"],[3841132,60,11,257,"1+4"],[3841548,36,15,257,"1+4"],[3841888,12,15,257,"1+4"],[3842004,12,15,257,"1+4"],[3842120,40,16,257,"1+4"],[3842520,40,16,257,"1+4"],[3842920,116,28,257,"1+4"],[3844952,116,28,257,"1+4"],[3846984,116,29,257,"1+4"],[3849092,116,28,257,"1+4"],[3851124,116,28,257,"1+4"],[3853156,12,14,257,"1+4"],[3853264,84,26,257,"1+4"],[3854632,52,24,257,"1+4"],[3855412,52,25,257,"1+4"],[3856228,56,26,257,"1+4"],[3857140,60,25,257,"1+4"],[3858080,44,25,257,"1+4"],[3858772,120,15,257,"1+4"],[3859900,116,29,257,"1+4"],[3862008,36,17,257,"1+4"],[3862396,36,16,257,"1+4"],[3862756,72,17,257,"1+4"],[3863524,20,17,257,"1+4"],[3863740,220,115,257,"1+4"],[3879556,176,116,257,"1+4"],[3897096,244,40,257,"1+4"],[3903196,160,22,257,"1+4"],[3905768,172,53,257,"1+4"],[3911468,252,86,257,"1+4"],[3925016,228,85,257,"2+4"],[3945044,292,88,257,"2+4"],[3964540,216,57,257,"2+4"],[3973776,260,23,257,"1+4"],[3978396,72,25,257,"1+4"],[3979608,224,22,257,"1+4"],[3982688,108,27,257,"1+4"],[3984516,200,62,257,"1+4"],[3992268,80,28,257,"1+4"],[3993668,76,28,257,"1+4"],[3995000,260,26,257,"1+4"],[3999228,128,26,257,"1+4"],[4001308,128,26,257,"1+4"],[4003388,52,25,257,"1+4"],[4004204,52,25,257,"1+4"],[4005020,52,25,257,"1+4"],[4005836,52,25,257,"1+4"],[4006652,260,24,257,"1+4"],[4010552,260,24,257,"1+4"],[4014452,180,23,257,"1+4"],[4017044,48,25,257,"1+4"],[4017796,180,25,257,"1+4"],[4020612,180,25,257,"1+4"],[4023428,156,26,257,"1+4"],[4025964,76,25,257,"1+4"],[4027156,52,20,257,"1+4"],[4027808,52,20,257,"1+4"],[4028460,56,28,257,"1+4"],[4029440,60,28,257,"1+4"],[4030492,164,40,257,"1+4"],[4034592,60,23,257,"1+4"],[4035460,136,27,257,"1+4"],[4037756,104,25,257,"1+4"],[4039788,180,25,257,"1+4"],[4042660,44,21,257,"1+4"],[4043608,44,22,257,"1+4"],[4044660,44,21,257,"1+4"],[4045712,56,27,257,"1+4"],[4046660,56,27,257,"1+4"],[4047608,44,21,257,"1+4"],[4048188,44,49,257,"1+4"],[4049540,192,27,257,"1+4"],[4052780,112,27,257,"1+4"],[4054672,192,27,257,"1+4"],[4057912,56,27,257,"1+4"],[4058860,60,28,257,"1+4"],[4059912,60,28,257,"1+4"],[4060964,140,40,257,"1+4"],[4064464,320,18,257,"1+4"],[4068064,44,22,257,"1+4"],[4068800,260,22,257,"1+4"],[4072376,180,23,257,"1+4"],[4074968,172,84,257,"1+4"],[4084000,292,54,257,"1+4"],[4093856,264,117,257,"1+4"],[4113164,236,116,257,"1+4"],[4130276,256,84,257,"1+4"],[4143716,220,55,257,"1+4"],[4151284,212,84,257,"1+4"],[4162416,248,84,257,"1+4"],[4175436,244,54,257,"1+4"],[4183672,244,54,257,"1+4"],[4191908,216,54,257,"1+4"],[4199200,248,53,257,"1+4"],[4209828,256,24,257,"1+4"],[4213700,248,84,257,"1+4"],[4228940,104,25,257,"1+4"],[4230952,280,51,257,"1+4"],[4239880,252,21,257,"1+4"],[4243292,220,65,257,"1+4"],[4252232,104,20,257,"1+4"],[4253532,84,36,257,"4+4"],[4256556,44,21,257,"1+4"],[4257936,48,19,257,"1+4"],[4258508,236,85,257,"1+4"],[4275640,268,53,257,"1+4"],[4284520,112,27,257,"1+4"],[4286412,96,15,257,"1+4"],[4287312,152,84,257,"2+4"],[4296888,272,30,257,"2+4"],[4303008,272,26,257,"1+4"],[4307428,84,26,257,"1+4"],[4308796,36,19,257,"1+4"],[4328212,216,83,257,"1+4"],[4339420,172,18,257,"1+4"],[4341356,264,54,257,"1+4"],[4350268,296,54,257,"1+4"],[4367284,296,23,257,"1+4"],[4373644,180,53,257,"1+4"],[4379612,176,116,257,"1+4"],[4392372,284,55,257,"1+4"],[4402140,196,52,257,"1+4"],[4408512,328,53,257,"1+4"],[4419380,328,55,257,null]],"texts":[[1917768,"¥","₽"],[1917968,"¥","₽"],[1918268,"円/L","руб/л"],[1919388,"円/L","руб/л"],[3342372,"リセットしました","Сброшено"],[3346080,"リセット できませんでした","Сброс|не выполнен"],[3354780,"燃費履歴を リセットしますか？","Сбросить историю|расхода?"],[3364392,"履歴リセット","Сброс истории"],[3367060,"燃費ランキングを リセットしますか？","Сбросить рейтинг|расхода?"],[3376672,"エコウォレット履歴を リセットしますか？","Сбросить историю|экономии?"],[3387652,"ワーニング1","Предупреждение 1"],[3389228,"シンプル表示","Простой вид"],[3391044,"設定","Настр."],[3391624,"燃費ランキング","Рейтинг расхода"],[3393772,"エコジャッジ","Эко-оценка"],[3395508,"燃費履歴+瞬間燃費","История + мгн. расход"],[3398148,"一時消音 できます","Звук можно|временно отключить"],[3400576,"燃費履歴(月平均)","История (ср. за мес.)"],[3402944,"エネルギーモニター","Монитор энергии"],[3405520,"エコウォレット履歴","История экономии"],[3407972,"エコウォレット","Экономия"],[3409872,"デジタルスピード","Цифровая скорость"],[3412184,"メッセージはありません","Нет сообщений"],[3415432,"EVモードに 現在切りかえできません 電池充電不足","Режим EV|сейчас недоступен|Батарея разряжена"],[3428032,"舵角調整完了","Калибровка руля завершена"],[3430060,"ガソリン残量が 少なくなりました","Мало|топлива"],[3435732,"EVモードが解除されました アクセル踏み過ぎ","Режим EV отключён|Сильно нажат газ"],[3444612,"EVモードが解除されました EV速度域超過","Режим EV отключён|Скорость выше EV"],[3453492,"EVモードが解除されました 電池充電不足","Режим EV отключён|Батарея разряжена"],[3462540,"EVモードが 解除されました","Режим EV|отключён"],[3514336,"EVモードに現在 切りかえできません","Режим EV|сейчас недоступен"],[3520708,"電源ON","Питание ВКЛ"],[3542680,"ハイブリッドシステム高温 出力制限中です","Перегрев гибридной системы|Мощность ограничена"],[3551348,"ヘッドライト レベリング システムチェック","Проверьте|корректор фар"],[3559564,"キーバッテリー残りわずか","Батарея ключа садится"],[3563244,"補機バッテリー(始動用) 充電不足 取扱書を 確認してください","Низкий заряд|АКБ 12 В|См.|руководство"],[3580644,"パーキングサポートブレーキを Onしますか?","Включить парковочный|тормоз-ассистент?"],[3586744,"普通","Обычная"],[3587584,"ステアリングロック未解除","Руль не разблокирован"],[3591104,"始動時はブレーキを 踏みながら パワースイッチを 押してください","Для запуска|нажмите тормоз|и кнопку|POWER"],[3605732,"EVモードに 現在切りかえできません 暖気中","Режим EV|сейчас недоступен|Идёт прогрев"],[3618420,"ライトが点灯しています","Фары включены"],[3621668,"車室内に キーがあります","Ключ|в салоне"],[3626704,"EVモードに 現在切りかえできません EV速度域超過","Режим EV|сейчас недоступен|Скорость выше EV"],[3639156,"舵角中立点記憶","Калибровка руля"],[3641456,"はい","Да"],[3642396,"ブレーキ システムチェック","Проверьте|тормозную систему"],[3647932,"エンジン油圧不足","Низкое давление масла"],[3650524,"スマートエントリー& スタートシステムチェック","Проверьте систему|Smart Entry & Start"],[3658584,"エンジン冷却水高温","Перегрев двигателя"],[3661336,"キーが見つかりません","Ключ не найден"],[3664504,"認証モード","Режим авторизации"],[3665992,"パーキングブレーキを 解除してください","Отпустите|стояночный тормоз"],[3673560,"整備モード","Сервисный режим"],[3690012,"EVモードに 現在切りかえできません アクセル踏み過ぎ","Режим EV|сейчас недоступен|Сильно нажат газ"],[3702464,"一時消音中","Звук отключён"],[3703868,"停車時はブレーキを 踏んでください","При остановке|нажмите тормоз"],[3710620,"告知設定","Подсказки"],[3722340,"メーターセッティング","Настройки приборов"],[3728884,"OFF時は消費金額を表示","При OFF — сумма затрат"],[3731824,"2行目","2-я строка"],[3733040,"1行目","1-я строка"],[3734192,"ガソリン価格","Цена топлива"],[3736964,"比較燃費","Сравн. расход"],[3738856,"エコウォレット","Экономия"],[3741856,"ガソリン価格","Цена топлива"],[3745048,"比較燃費","Сравн. расход"],[3747080,"告知タイミング","Время подсказки"],[3749896,"遅い","Поздно"],[3750592,"2行目","2-я строка"],[3751972,"1行目","1-я строка"],[3753280,"初期化","Сброс"],[3754700,"初期化しました","Сброс выполнен"],[3758272,"初期化 できませんでした","Сброс|не выполнен"],[3767120,"出荷時の設定に 戻しますか？","Вернуть заводские|настройки?"],[3774872,"EV表示","Индикация EV"],[3776492,"日付","Дата"],[3777372,"走行結果表示","Итоги поездки"],[3780208,"記憶エラー","Ошибка записи"],[3782100,"設定","Настройки"],[3784440,"早い","Рано"],[3786304,"初期化","Сброс"],[3787496,"EV表示","Индикация EV"],[3788872,"エコウォレット","Экономия"],[3791464,"走行結果表示","Итоги поездки"],[3794000,"ブザー音量","Громкость сигнала"],[3796940,"日付","Дата"],[3797692,"停車中に 操作してください","Выполняйте|на стоянке"],[3806684,"距離","Путь"],[3806984,"燃費","Расход"],[3808764,"お得","Экон."],[3809064,"燃料","Топл."],[3809364,"消費","Затр."],[3809664,"スタートからお得","Экономия с начала"],[3811612,"スタートから消費","Затраты с начала"],[3813560,"お得TRIP B","Экономия TRIP B"],[3815156,"お得TRIP A","Экономия TRIP A"],[3816808,"消費TRIP B","Затраты TRIP B"],[3818404,"消費TRIP A","Затраты TRIP A"],[3820056,"比較燃費","Сравн. расход"],[3820912,"安定走行","Ровная езда"],[3821820,"エコ停止","Эко-остановка"],[3822728,"評価","Оценка"],[3823204,"エコ発進","Эко-разгон"],[3824112,"走行時間","Время в пути"],[3825740,"今回の走行","Эта поездка"],[3827820,"お得","Экономия"],[3828636,"燃費","Расход"],[3829452,"消費","Затраты"],[3830268,"走行距離","Пробег"],[3834716,"トランク オープン","Багажник|открыт"],[3837248,"バックドア オープン","Дверь багажника|открыта"],[3840424,"分前","мин"],[3840724,"瞬間","Мгнов."],[3842520,"1年前","Год"],[3842920,"平均燃費","Ср. расход"],[3844952,"平均車速","Ср. скорость"],[3846984,"走行時間","Время в пути"],[3849092,"平均燃費","Ср. расход"],[3851124,"平均車速","Ср. скорость"],[3853156,"月","мес"],[3853264,"いいえ","Нет"],[3854632,"戻る","Назад"],[3855412,"決定","ОК"],[3856228,"はい","Да"],[3858772,"長押しでリセット","Удерживайте для сброса"],[3859900,"走行時間","Время в пути"],[3862008,"現在","Сейчас"],[3862756,"ランク外","Вне рейтинга"],[3863524,"位","место"],[3863740,"パワーステアリング システムチェック ただちに販売店で 点検を受けてください","Проверьте|усилитель руля|Срочно обратитесь|к дилеру"],[3879556,"駆動用電池の 冷却部品の メンテナンス必要 取扱書を確認","Требуется|обслуживание охлаждения|тяговой батареи|См. руководство"],[3897096,"パーキングサポートブレーキを Offしますか?","Выключить парковочный|тормоз-ассистент?"],[3903196,"加速抑制中です","Ускорение ограничено"],[3905768,"電源を OFFしてください","Выключите|питание"],[3911468,"ハイブリッドシステム故障 安全な場所に停車して 販売店に連絡","Неисправность гибрида|Остановитесь в безопасном месте|Обратитесь к дилеру"],[3973776,"ブレーキを踏んでください","Нажмите педаль тормоза"],[3979608,"ドライブインフォメーション","Информация о поездке"],[3982688,"燃費時間","Интервал расхода"],[3984516,"燃費時間を 変更しますか？","Изменить интервал|расхода?"],[3992268,"5分間","5 минут"],[3993668,"1分間","1 минута"],[3995000,"ドライブインフォメーション","Информация о поездке"],[3999228,"先行車発進","Впереди тронулись"],[4001308,"先行車発進","Впереди тронулись"],[4003388,"調光","Яркость"],[4004204,"調光","Яркость"],[4005020,"表示","Отображение"],[4005836,"表示","Отображение"],[4006652,"ドライブインフォメーション","Информация о поездке"],[4010552,"ドライブインフォメーション","Информация о поездке"],[4014452,"エコウォレット","Экономия"],[4017044,"日付","Дата"],[4017796,"操作ガイド表示","Подсказки управления"],[4020612,"操作ガイド表示","Подсказки управления"],[4023428,"走行結果表示","Итоги поездки"],[4025964,"初期化","Сброс"],[4028460,"高い","Высокая"],[4029440,"普通","Обычная"],[4030492,"車線逸脱警報の 感度を調整できます","Чувствительность LDA|можно настроить"],[4035460,"先行車発進","Впереди тронулись"],[4037756,"告知設定","Подсказки"],[4039788,"告知タイミング","Время подсказки"],[4042660,"早い","Рано"],[4043608,"普通","Обычная"],[4044660,"遅い","Поздно"],[4045712,"表示","Отображение"],[4046660,"調光","Яркость"],[4047608,"液晶","Дисплей"],[4048188,"液晶 以外","Кроме|дисплея"],[4049540,"操作ガイド表示","Подсказки управления"],[4052780,"告知設定","Подсказки"],[4054672,"告知タイミング","Время подсказки"],[4057912,"早い","Рано"],[4058860,"普通","Обычная"],[4059912,"遅い","Поздно"],[4060964,"告知タイミングを 調整できます","Время подсказки|можно настроить"],[4064464,"取扱書をよく読んでからご使用ください","Перед использованием прочтите руководство"],[4068064,"普通","Обычная"],[4068800,"アクセルを戻してください","Отпустите педаль газа"],[4072376,"充電システム故障","Неисправность зарядки"],[4074968,"LDA故障 販売店で 点検してください","Неисправность LDA|Обратитесь|к дилеру"],[4084000,"プリクラッシュセーフティ故障 販売店で点検してください","Неисправность PCS|Обратитесь к дилеру"],[4093856,"ドライブスタート コントロール故障 販売店で点検してください","Неисправность|Drive-Start Control|Обратитесь к дилеру"],[4113164,"ブレーキオーバーライド システム故障 販売店で 点検してください","Неисправность|системы приоритета|тормоза|Обратитесь к дилеру"],[4130276,"ヘッドランプシステム故障 販売店で 点検してください","Неисправность фар|Обратитесь|к дилеру"],[4143716,"アクセルとブレーキが 両方踏まれています","Нажаты обе педали:|газ и тормоз"],[4151284,"AHB起動のためには ハイビーム操作が 必要です","Для включения AHB|включите|дальний свет"],[4162416,"VSCがOFFのため プリクラッシュブレーキも 停止します","VSC выключена:|торможение PCS|тоже отключено"],[4175436,"プリクラッシュセーフティ 現在使用できません","PCS|сейчас недоступна"],[4183672,"LDA 約50km/h以下で 使用できません","LDA не работает|ниже ~50 км/ч"],[4191908,"LDA 現在の車速では 使用できません","LDA недоступна|на этой скорости"],[4199200,"前方カメラ一時使用不可 しばらくお待ちください","Передняя камера временно|недоступна. Подождите"],[4209828,"メーターセッティング","Настройки приборов"],[4213700,"前方カメラ一時使用不可 ガラスの汚れや曇りを 取ってください","Передняя камера|временно недоступна|Очистите стекло"],[4228940,"警報感度","Чувствительность"],[4230952,"CHECKING PRE-COLLISION BRAKE","Проверка|тормоза PCS"],[4239880,"クルーズシステムチェック","Проверьте круиз-контроль"],[4243292,"プリクラッシュセーフティ 警報","PCS|предупреждение"],[4252232,"先行車発進","Впереди тронулись"],[4256556,"高い","Высокая"],[4258508,"ブレーキを踏みながら キーでパワースイッチに 触れてください","Нажав тормоз,|коснитесь ключом|кнопки POWER"],[4275640,"プリクラッシュセーフティが OFFになりました","PCS|выключена"],[4284520,"ブレーキ!","ТОРМОЗИ!"],[4286412,"長押しで設定","Удерживайте для настройки"],[4303008,"メーターセッティング","Настройки приборов"],[4307428,"いいえ","Нет"],[4328212,"バッテリー保護のため 自動電源を OFFしました","Для защиты АКБ|питание|выключено"],[4339420,"クリアランスソナー","Парктроник"],[4341356,"クリアランスソナー故障 販売店で点検してください","Неисправность парктроника|Обратитесь к дилеру"],[4350268,"クリアランスソナー使用できません ソナーの汚れを除去してください","Парктроник недоступен|Очистите датчики"],[4367284,"クリアランスソナー使用できません","Парктроник недоступен"],[4373644,"アクセルペダルが 踏まれています","Нажата|педаль газа"],[4379612,"駆動用電池の 冷却部品の メンテナンス必要 取扱書を確認","Требуется|обслуживание охлаждения|тяговой батареи|См. руководство"],[4392372,"パーキングサポートブレーキ 現在使用できません","Парковочный тормоз-ассистент|сейчас недоступен"],[4402140,"ADJUSTING FRONT CAMERA","Калибровка|передней камеры"],[4408512,"アクセルが踏まれています ブレーキを踏みなおしてください","Нажата педаль газа|Нажмите тормоз ещё раз"],[3675048,"駆動用電池保護が必要 Ⓝレンジの使用を 控えてください","Защита тяговой батареи|Не используйте|положение N"],[3925016,"駆動用電池保護が必要 Ⓟレンジにして 再始動してください","Защита тяговой батареи|Включите P|и перезапустите"],[3945044,"Ⓝレンジです アクセルを緩めて希望レンジに 切りかえてください","Включено N|Отпустите газ и|выберите передачу"],[3964540,"駐車時はⓅレンジに 入れてください","При парковке|включите P"],[4287312,"始動時は Ⓟレンジに 入れてください","Для запуска|включите|P"],[4296888,"Ⓟレンジに入れてください","Включите P"]]} };
+let TX = { table: null, items: [], dict: new Map(), ref: null, refName: '', filter: 'jp', search: '', page: 0, model: '', src: '' };
+const TX_PER_PAGE = 30;
+const alignUp = (v, a) => Math.ceil(v / a) * a;
+// Part number of the graphics: 1AL70-type flashes keep it at 0x10004, newer ones (e.g. 12Y)
+// split the flash into sections whose 55AA… header at 0x0 carries it at 0x10.
+function modelId() {
+  if (!DATA) return '';
+  const pick = o => String.fromCharCode(...DATA.slice(o, o + 12)).replace(/[^\x20-\x7e]/g, '').trim();
+  if (DATA[0x10000] === 0x55 && DATA[0x10001] === 0xAA) return pick(0x10004);
+  if (DATA[0] === 0x55 && DATA[1] === 0xAA && DATA[0x10] === 0x38) return pick(0x10);
+  return '';
+}
+// Bits per pixel are not stored in the table: they follow from the space up to the next picture.
+// Where that space has slack, the base depth is chosen so that a 1-bit…8-bit base plane has
+// exactly the same shape as the alpha plane (two-plane pictures), or rows line up best (single plane).
+function pictureFormat(e) {
+  const px = e.w * e.h, s = e.size; if (!px || !s) return null;
+  const pix = (b, i) => { const bit = i * b, v = ORIG[e.a + (bit >> 3)]; return b < 8 ? (v >> (bit & 7)) & ((1 << b) - 1) : v; };
+  if (e.f === 0x101) {
+    const cand = [1, 2, 4, 8].filter(b => alignUp(Math.ceil(px * b / 8), 4) + Math.ceil(px / 2) <= s);
+    if (!cand.length) return null;
+    let best = null; const st = Math.max(1, Math.floor(px / 4000));
+    for (const b of cand) {
+      const aa = e.a + alignUp(Math.ceil(px * b / 8), 4); let ok = 0, n = 0;
+      for (let i = 0; i < px; i += st) { const A = (ORIG[aa + (i >> 1)] >> ((i & 1) * 4)) & 15; ok += (A > 0) === (pix(b, i) > 0); n++; }
+      if (!best || ok / n > best.sc + 1e-9) best = { b, sc: ok / n };
+    }
+    return best.b + '+4';
+  }
+  const cand = [1, 2, 4, 8].filter(b => Math.ceil(px * b / 8) <= s);
+  if (!cand.length) return null;
+  const exact = cand.filter(b => s < Math.ceil(px * b / 8) + 8);
+  if (exact.length) return String(exact[exact.length - 1]);
+  const vs = b => { const m = (1 << b) - 1, st = Math.max(1, Math.floor(e.w / 40)); let t = 0, c = 0;
+    for (let y = 0; y < e.h - 1; y++) for (let x = 0; x < e.w; x += st) { t += Math.abs(pix(b, y * e.w + x) - pix(b, (y + 1) * e.w + x)) / m; c++; }
+    return t / Math.max(c, 1); };
+  const sc = new Map(cand.map(b => [b, vs(b)])), mn = Math.min(...sc.values());
+  return String(Math.min(...cand.filter(b => sc.get(b) <= mn * 1.3 + 0.01)));
+}
+function fmtInfo(fmt) { if (!fmt) return null; const [b, a] = String(fmt).split('+'); return { b: +b, alpha: !!a }; }
+// rows: [address, width, height, flags, format?]; the format is computed when missing.
+function buildTable(rows) {
+  const t = rows.filter(r => r[0] >= 0x20000 && r[0] < DATA.length && r[1] && r[2]).map(r => ({ a: r[0], w: r[1], h: r[2], f: r[3], fmt: r[4] }));
+  t.sort((x, y) => x.a - y.a);
+  t.forEach((e, k) => { e.size = k + 1 < t.length ? t[k + 1].a - e.a : 0; if (e.fmt === undefined) e.fmt = pictureFormat(e); });
+  return t.filter(e => !e.fmt || planesEnd(e) <= DATA.length);
+}
+function planesEnd(e) { const i = fmtInfo(e.fmt), px = e.w * e.h, n = Math.ceil(px * i.b / 8); return e.a + (i.alpha ? alignUp(n, 4) + Math.ceil(px / 2) : n); }
+// mask = base plane start (for text it is the 1-bit mask), alpha = 4-bit plane or -1
+function planes(e) {
+  const i = fmtInfo(e.fmt) || { b: 1, alpha: true }, px = e.w * e.h, n = Math.ceil(px * i.b / 8);
+  const alpha = i.alpha ? e.a + alignUp(n, 4) : -1;
+  return { px, b: i.b, mask: e.a, alpha, end: i.alpha ? alpha + Math.ceil(px / 2) : e.a + n };
+}
+const getA = (buf, pl, i) => (buf[pl.alpha + (i >> 1)] >> ((i & 1) * 4)) & 15;
+// Writes a text pixel: the alpha plane gets the brightness, the base plane the colour.
+// 1-bit base = mask (alpha > 0); 2-bit base in messages: 3 is white text, 2 the gear-letter badge.
+function setA(buf, pl, i, v) {
+  const j = pl.alpha + (i >> 1), sh = (i & 1) * 4; buf[j] = (buf[j] & ~(15 << sh)) | (v << sh);
+  if (pl.b === 1) { const k = pl.mask + (i >> 3), b = 1 << (i & 7); buf[k] = v ? buf[k] | b : buf[k] & ~b; }
+  else if (pl.b === 2) { const k = pl.mask + (i >> 2), s2 = (i & 3) * 2; buf[k] = (buf[k] & ~(3 << s2)) | ((v ? 3 : 0) << s2); }
+}
+function hashPlanes(buf, e) {
+  const pl = planes(e); let h = 2166136261 >>> 0;
+  for (let i = pl.mask; i < pl.end; i++) { h ^= buf[i]; h = Math.imul(h, 16777619) >>> 0; }
+  return `${e.w}x${e.h}:${h.toString(16)}`;
+}
+const txKey = () => 'meterFlashEditor.tx2.' + (TX.model || 'unknown');
+function loadSavedTx() { try { return JSON.parse(localStorage.getItem(txKey())) || {}; } catch { return {}; } }
+function txPersist() {
+  const m = {}; for (const it of TX.items) if (it.ru !== it.draft) m[it.addrs[0].a] = it.ru;
+  try { localStorage.setItem(txKey(), JSON.stringify(m)); } catch {}
+}
+const tableKey = m => 'meterFlashEditor.table.' + m;
+function initTx() {
+  TX.model = modelId(); TX.ref = null; TX.refName = ''; TX.items = []; TX.table = null; TX.page = 0; TX.dict = new Map(); TX.src = '';
+  const pr = PRESETS[TX.model];
+  if (pr) {
+    TX.table = buildTable(pr.table); TX.dict = new Map(pr.texts.map(t => [t[0], { jp: t[1], ru: t[2] }]));
+    TX.src = `встроенный ключ: прошивка процессора ${pr.mcu}`;
+  } else {
+    try { const s = JSON.parse(localStorage.getItem(tableKey(TX.model))); if (s && s.rows) { TX.table = buildTable(s.rows); TX.src = `ключ из ${s.name} (сохранён ранее)`; } } catch {}
+  }
+  buildItems();
+}
+function applyMf(bytes, name) {
+  const rows = parseMfTable(bytes);
+  FILES.mf = mfInfo(bytes, name, rows); renderFiles();
+  if (!rows) {
+    toast(FILES.mf.encrypted ? `${name}: прошивка зашифрована (файл для iProg) — нужен расшифрованный MF, прочитанный скриптом` : `${name}: таблица картинок в этом файле не найдена`, true);
+    return;
+  }
+  TX.table = buildTable(rows); TX.src = `ключ из ${name}`;
+  const pr = PRESETS[TX.model]; if (!pr) TX.dict = new Map();
+  try { localStorage.setItem(tableKey(TX.model), JSON.stringify({ name, rows: TX.table.map(e => [e.a, e.w, e.h, e.f, e.fmt]) })); } catch {}
+  buildItems(); PIC = null; TX.page = 0;
+  renderPicGrid(); renderImg(); renderTx(); renderMap(); renderKey(); renderHealth();
+  toast(`Ключ загружен: ${TX.table.length} картинок, из них надписей ${TX.items.length}`);
+}
+function renderKey() {
+  $('#keyinfo').textContent = !DATA ? '' : TX.table ? `· ${TX.src}` : '· ключ (прошивка MF) не загружен — картинки ищутся вручную';
+}
+// One item per distinct picture; identical copies at other addresses are translated together.
+function buildItems() {
+  TX.items = [];
+  if (!TX.table) return;
+  const saved = loadSavedTx(), groups = new Map();
+  for (const e of TX.table) {
+    // text pictures, plus two-colour messages (white text + gear badge) that have a translation
+    if (!(e.fmt === '1+4' || (e.fmt === '2+4' && TX.dict.has(e.a))) || planes(e).end > ORIG.length) continue;
+    const key = hashPlanes(ORIG, e);
+    let it = groups.get(key);
+    if (!it) { it = { key, w: e.w, h: e.h, addrs: [], jp: '', draft: '', ru: '' }; groups.set(key, it); TX.items.push(it); }
+    it.addrs.push(e);
+    const d = TX.dict.get(e.a);
+    if (d && !it.jp) { it.jp = d.jp; it.draft = it.ru = d.ru; }
+  }
+  for (const it of TX.items) { const s = saved[it.addrs[0].a]; if (typeof s === 'string') it.ru = s; }
+  if (!TX.items.some(it => it.jp)) TX.filter = 'all';
+}
+function itemChanged(it) { const pl = planes(it.addrs[0]); for (let i = pl.mask; i < pl.end; i++) if (DATA[i] !== ORIG[i]) return true; return false; }
+function itemRef(it) {
+  if (!TX.ref) return null;
+  const pl = planes(it.addrs[0]); let diff = 0, ff = 0;
+  for (let i = pl.mask; i < pl.end; i++) { if (TX.ref[i] !== ORIG[i]) diff++; if (TX.ref[i] === 0xFF) ff++; }
+  return { diff, ff: ff > (pl.end - pl.mask) * 0.9 };
+}
+function alphaCanvas(buf, it, levels) {
+  const e = it.addrs[0], pl = planes(e), c = document.createElement('canvas'); c.width = e.w; c.height = e.h;
+  const id = new ImageData(e.w, e.h), d = id.data;
+  for (let i = 0; i < pl.px; i++) { const v = (levels ? levels[i] : getA(buf, pl, i)) * 17; d[i * 4] = d[i * 4 + 1] = d[i * 4 + 2] = v; d[i * 4 + 3] = 255; }
+  c.getContext('2d').putImageData(id, 0, 0);
+  const z = e.w <= 160 ? 2 : 1; c.style.width = e.w * z + 'px'; c.style.height = e.h * z + 'px';
+  return c;
+}
+// Text lines of the original picture (row groups with ink), for matching the letter size.
+function jpLines(it) {
+  const e = it.addrs[0], pl = planes(e), g = []; let s = -1;
+  for (let y = 0; y <= e.h; y++) {
+    let ink = false; if (y < e.h) for (let x = 0; x < e.w; x++) if (getA(ORIG, pl, y * e.w + x)) { ink = true; break; }
+    if (ink && s < 0) s = y; if (!ink && s >= 0) { const l = g[g.length - 1]; if (l && s - l[1] <= 3) l[1] = y - 1; else g.push([s, y - 1]); s = -1; }
+  }
+  return g;
+}
+function renderRuLevels(it, text) {
+  const w = it.w, h = it.h, out = new Uint8Array(w * h);
+  const lines = String(text || '').split('|').map(s => s.trim()).filter(Boolean);
+  if (!lines.length) return { levels: out, sx: 1 };
+  const jl = jpLines(it), hs = jl.map(([a, b]) => b - a + 1).sort((a, b) => a - b), gh = hs.length ? hs[hs.length >> 1] : h;
+  const fam = $('#txFam').value, wt = $('#txWt').value, k = +$('#txSize').value / 100, minScale = Math.max(0.3, Math.min(1, +$('#txMinScale').value / 100));
+  const probe = document.createElement('canvas').getContext('2d'); probe.font = `${wt} 100px "${fam}"`;
+  const capR = (probe.measureText('НПЕ').actualBoundingBoxAscent || 70) / 100;
+  const n = lines.length, pitch = 1.5; // line pitch in cap heights
+  let cap = Math.min(gh * 0.74 * k, (h - 2) / (1 + (n - 1) * pitch + 0.3));
+  let size = cap / capR, sx = 1;
+  const width = () => { probe.font = `${wt} ${size}px "${fam}"`; return Math.max(...lines.map(l => probe.measureText(l).width)); };
+  const avail = w - 4, wd = width();
+  if (wd > avail) { sx = avail / wd; if (sx < minScale) { size *= sx / minScale; sx = minScale; cap = size * capR; } }
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const ctx = c.getContext('2d'); ctx.fillStyle = '#000'; ctx.fillRect(0, 0, w, h);
+  ctx.fillStyle = '#fff'; ctx.font = `${wt} ${size}px "${fam}"`; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+  const block = cap * (1 + (n - 1) * pitch), top = (h - block - cap * 0.15) / 2;
+  lines.forEach((l, i) => { ctx.save(); ctx.translate(w / 2, top + cap + i * cap * pitch); ctx.scale(sx, 1); ctx.fillText(l, 0, 0); ctx.restore(); });
+  const d = ctx.getImageData(0, 0, w, h).data;
+  for (let i = 0; i < w * h; i++) out[i] = Math.min(15, Math.round(d[i * 4] * 15 / 255));
+  return { levels: out, sx };
+}
+function applyItem(it) {
+  const r = renderRuLevels(it, it.ru);
+  for (const e of it.addrs) { const pl = planes(e); for (let i = 0; i < pl.px; i++) setA(DATA, pl, i, r.levels[i]); }
+  return r;
+}
+function copyItem(it, from) { for (const e of it.addrs) { const pl = planes(e); DATA.set(from.subarray(pl.mask, pl.end), pl.mask); } }
+
+const TX_FILTERS = [
+  ['jp', 'Японские надписи', it => !!it.jp],
+  ['todo', 'Ещё не применены', it => !!it.jp && !itemChanged(it)],
+  ['done', 'Применены', it => itemChanged(it)],
+  ['ref', 'Есть в загруженном дампе', it => { const r = itemRef(it); return r && r.diff && !r.ff; }],
+  ['all', 'Все картинки-надписи', () => true],
+];
+function renderTx() {
+  if (!DATA) return;
+  $('#txIntro').innerHTML = TX.table
+    ? `Здесь все японские надписи этой приборки (${esc(TX.src)}). В каждой строке: как надпись выглядит сейчас, японский текст, русский вариант (черновик — поправьте как вам нравится) и как она будет выглядеть. Две строки — через знак «|». Когда всё устроит, нажмите «Применить все переводы», затем «Сохранить BIN».`
+    : 'Для этой приборки нет встроенной таблицы надписей. Откройте «Ещё» и загрузите файл прошивки процессора (MF) этой модели — адреса и размеры надписей возьмутся из него.';
+  const chips = $('#txChips'); chips.innerHTML = '';
+  for (const [key, title, test] of TX_FILTERS) {
+    if (key === 'ref' && !TX.ref) continue;
+    const n = TX.items.filter(test).length;
+    if (!n && key !== TX.filter && key !== 'jp') continue;
+    const c = document.createElement('span'); c.className = 'chip' + (key === TX.filter ? ' on' : '');
+    c.innerHTML = `${title}<span class="n">${n}</span>`;
+    c.onclick = () => { TX.filter = key; TX.page = 0; renderTx(); };
+    chips.appendChild(c);
+  }
+  const jp = TX.items.filter(it => it.jp);
+  $('#txStat').textContent = TX.items.length ? `применено: ${jp.filter(itemChanged).length} из ${jp.length}` : '';
+  const q = TX.search.toLowerCase();
+  const list = TX.items.filter((TX_FILTERS.find(f => f[0] === TX.filter) || TX_FILTERS[0])[2])
+    .filter(it => !q || (it.jp + ' ' + it.ru).toLowerCase().includes(q));
+  const pages = Math.max(1, Math.ceil(list.length / TX_PER_PAGE));
+  TX.page = Math.max(0, Math.min(pages - 1, TX.page));
+  $('#txPage').textContent = ` ${TX.page + 1} / ${pages} `;
+  const box = $('#txList'); box.innerHTML = '';
+  for (const it of list.slice(TX.page * TX_PER_PAGE, (TX.page + 1) * TX_PER_PAGE)) box.appendChild(txCard(it));
+  if (!list.length) box.innerHTML = '<div class="panel hint">Ничего не найдено.</div>';
+}
+function txCard(it) {
+  const card = document.createElement('div'), changed = itemChanged(it), rs = itemRef(it);
+  card.className = 'slot' + (changed ? ' done' : '');
+  const hd = document.createElement('div'); hd.className = 'hd';
+  hd.innerHTML = `<span class="t">${esc(it.jp || 'надпись')}</span><span class="mono hint">${hex(it.addrs[0].a)} · ${it.w}×${it.h}${it.addrs.length > 1 ? ` · ${it.addrs.length} копии` : ''}</span>` +
+    (changed ? '<span class="badge ok">применено</span>' : '') + (rs && rs.ff ? '<span class="badge b">в загруженном дампе залита FF</span>' : '');
+  const imgs = document.createElement('div'); imgs.className = 'imgs';
+  const fig = (cv, cap, extra) => { const f = document.createElement('figure'), fc = document.createElement('figcaption'); fc.textContent = cap; f.append(cv, fc); if (extra) f.appendChild(extra); imgs.appendChild(f); return f; };
+  fig(alphaCanvas(ORIG, it), 'оригинал');
+  const pv = fig(alphaCanvas(null, it, renderRuLevels(it, it.ru).levels), changed ? 'в файле сейчас / будет так' : 'будет так');
+  if (rs && rs.diff && !rs.ff) {
+    const b = document.createElement('button'); b.className = 'small'; b.textContent = 'Взять этот вариант';
+    b.onclick = () => { copyItem(it, TX.ref); updateDirty(); card.replaceWith(txCard(it)); renderTxStat(); };
+    fig(alphaCanvas(TX.ref, it), 'в загруженном дампе', b);
+  }
+  const row = document.createElement('div'); row.className = 'tr';
+  const inp = document.createElement('input'); inp.value = it.ru; inp.placeholder = 'Русский текст (две строки — через |)';
+  let tmr = 0;
+  inp.oninput = () => { it.ru = inp.value; clearTimeout(tmr); tmr = setTimeout(() => { const c = alphaCanvas(null, it, renderRuLevels(it, it.ru).levels); pv.firstChild.replaceWith(c); txPersist(); }, 120); };
+  const go = document.createElement('button'); go.className = 'primary'; go.textContent = 'Применить';
+  go.onclick = () => {
+    if (!it.ru.trim()) { toast('Введите перевод', true); return; }
+    const r = applyItem(it); updateDirty(); card.replaceWith(txCard(it)); renderTxStat();
+    if (r.sx < 0.8) toast(`Длинный текст сжат до ${Math.round(r.sx * 100)}% по ширине — можно сократить формулировку.`);
+  };
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter') go.click(); });
+  const back = document.createElement('button'); back.textContent = 'Вернуть японскую';
+  back.onclick = () => { copyItem(it, ORIG); updateDirty(); card.replaceWith(txCard(it)); renderTxStat(); };
+  const reset = document.createElement('button'); reset.className = 'small'; reset.textContent = 'черновик'; reset.title = 'Вернуть мой исходный вариант перевода';
+  reset.onclick = () => { it.ru = it.draft; txPersist(); card.replaceWith(txCard(it)); };
+  row.append(inp, go, back); if (it.draft && it.ru !== it.draft) row.appendChild(reset);
+  card.append(hd, imgs, row);
+  return card;
+}
+function renderTxStat() { const jp = TX.items.filter(it => it.jp); $('#txStat').textContent = `применено: ${jp.filter(itemChanged).length} из ${jp.length}`; }
+['#txFam', '#txWt', '#txSize', '#txMinScale'].forEach(s => $(s).addEventListener('change', renderTx));
+$('#txSearch').addEventListener('input', () => { TX.search = $('#txSearch').value; TX.page = 0; renderTx(); });
+$('#txPrev').onclick = () => { TX.page--; renderTx(); window.scrollTo(0, 0); };
+$('#txNext').onclick = () => { TX.page++; renderTx(); window.scrollTo(0, 0); };
+$('#txApplyAll').onclick = () => {
+  if (!DATA || !TX.items.length) return;
+  let n = 0; const tight = [];
+  for (const it of TX.items) { if (!it.jp || !it.ru.trim()) continue; const r = applyItem(it); n++; if (r.sx < 0.8) tight.push(it.ru.replace(/\|/g, ' ')); }
+  updateDirty(); renderTx();
+  toast(`Применено переводов: ${n}.` + (tight.length ? ` Сильно сжаты по ширине (${tight.length}): ${tight.slice(0, 4).join('; ')}${tight.length > 4 ? '…' : ''}` : ''));
+};
+$('#txRevertAll').onclick = () => {
+  if (!DATA || !confirm('Вернуть все надписи к японскому оригиналу?')) return;
+  for (const it of TX.items) copyItem(it, ORIG);
+  updateDirty(); renderTx();
+};
+$('#txRefBtn').onclick = () => DATA && $('#txRefIn').click();
+$('#txRefIn').onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  const b = new Uint8Array(await f.arrayBuffer());
+  if (b.length !== DATA.length) { toast('Другой размер файла — это дамп другой микросхемы', true); return; }
+  TX.ref = b; TX.refName = f.name;
+  const tr = TX.items.filter(it => { const r = itemRef(it); return r && r.diff && !r.ff; }).length;
+  const ff = TX.items.filter(it => { const r = itemRef(it); return r && r.ff; }).length;
+  $('#txRefInfo').textContent = `${f.name}: переведено надписей ${tr}` + (ff ? `, залито FF (белые прямоугольники) ${ff}` : '');
+  $('#txCopyAll').disabled = !tr; TX.filter = 'ref'; TX.page = 0; renderTx();
+};
+$('#txCopyAll').onclick = () => {
+  let n = 0;
+  for (const it of TX.items) { const r = itemRef(it); if (r && r.diff && !r.ff) { copyItem(it, TX.ref); n++; } }
+  updateDirty(); renderTx(); toast(`Взято из загруженного дампа: ${n} надписей (залитые FF пропущены)`);
+};
+// Generic: find the picture table (12-byte big-endian records) in a CPU firmware dump.
+function parseMfTable(mf) {
+  const dv = new DataView(mf.buffer, mf.byteOffset, mf.byteLength), L = mf.length;
+  const ok = o => { const a = dv.getUint32(o), w = dv.getUint16(o + 4), h = dv.getUint16(o + 6), f = dv.getUint16(o + 8);
+    return a >= 0x20000 && a < DATA.length && w > 0 && w < 4000 && h > 0 && h < 2000 && (f === 0x100 || f === 0x101 || f === 0); };
+  let best = null;
+  for (let o = 0; o + 12 <= L; o += 2) {
+    if (!ok(o)) continue;
+    let n = 0, bad = 0, p = o, last = o;
+    while (p + 12 <= L && bad <= 3) { if (ok(p)) { n++; last = p; bad = 0; } else bad++; p += 12; }
+    if (n >= 50 && (!best || n > best.n)) best = { o, end: last + 12, n };
+    if (n >= 50) o = last;
+  }
+  if (!best) return null;
+  const rows = []; for (let p = best.o; p < best.end; p += 12) if (ok(p)) rows.push([dv.getUint32(p), dv.getUint16(p + 4), dv.getUint16(p + 6), dv.getUint16(p + 8)]);
+  rows.at = best.o;
+  return rows;
+}
+$('#txMfBtn').onclick = () => DATA && $('#txMfIn').click();
+$('#txMfIn').onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  applyMf(new Uint8Array(await f.arrayBuffer()), f.name);
+};
+$('#txSave').onclick = () => downloadBlob(new Blob([JSON.stringify({ model: TX.model, items: TX.items.filter(it => it.ru).map(it => ({ a: it.addrs[0].a, jp: it.jp, ru: it.ru })) }, null, 1)], { type: 'application/json' }), `translations_${TX.model || 'meter'}.json`);
+$('#txLoad').onclick = () => $('#txLoadIn').click();
+$('#txLoadIn').onchange = e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  f.text().then(t => {
+    const m = JSON.parse(t); if (!Array.isArray(m.items)) throw 0;
+    const byA = new Map(m.items.map(x => [x.a, x])); let n = 0;
+    for (const it of TX.items) for (const e of it.addrs) { const x = byA.get(e.a); if (x) { it.ru = x.ru; if (x.jp && !it.jp) it.jp = x.jp; n++; break; } }
+    txPersist(); renderTx(); toast(`Загружено переводов: ${n}`);
+  }).catch(() => toast('Неверный файл переводов', true));
+};
+
+// ---------- Diff ----------
+function diffRanges() { return DATA ? diffList(ORIG, DATA).ranges : []; }
+function describe(addr) {
+  const L = ckLayout(DATA);
+  if (L && (addr >= CK_AT || L.secs.some(a => addr >= a + 0x20 && addr < a + 0x24))) return 'контрольная сумма графики';
+  for (const f of FONTS) {
+    if (addr >= f.base && addr < f.base + f.dataLen) {
+      const g = f.gl.find(g => addr >= f.base + g.off && addr < f.base + g.off + g.bytes);
+      return `шрифт ${f.H}px` + (g ? `, символ «${safeChar(g.ch)}»` : '');
+    }
+    if (addr >= f.at && addr < f.at + 0x2c + f.n * 8) return `таблица шрифта ${f.H}px`;
+  }
+  const it = TX.items.find(it => it.addrs.some(e => { const pl = planes(e); return addr >= pl.mask && addr < pl.end; }));
+  if (it) return `надпись «${it.jp || '?'}»` + (it.ru ? ` → «${it.ru.replace(/\|/g, ' ')}»` : '');
+  const bm = BMS.find(m => addr >= m.off && addr < m.off + new Bmp({ base: m.off, w: m.w, h: m.h, bpp: m.bpp }).byteLen);
+  return bm ? `картинка «${bm.name}»` : 'картинка / данные';
+}
+function renderDiff() {
+  const r = diffRanges(), tb = $('#dBody'); tb.innerHTML = '';
+  $('#dSum').textContent = r.length ? `Изменённых участков: ${r.length}` : 'Изменений нет';
+  for (const [a, b] of r) {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td class="mono">${hex(a)}</td><td>${b - a + 1} байт</td><td></td><td></td>`;
+    tr.children[2].textContent = describe(a);
+    const btn = document.createElement('button'); btn.className = 'small'; btn.textContent = 'Откатить';
+    btn.onclick = () => { DATA.set(ORIG.subarray(a, b + 1), a); renderDiff(); renderImg(); renderGallery(); updateDirty(); };
+    tr.children[3].appendChild(btn); tb.appendChild(tr);
+  }
+}
+$('#dRevertAll').onclick = () => { if (DATA && confirm('Откатить все изменения?')) { DATA.set(ORIG); renderDiff(); renderImg(); renderGallery(); updateDirty(); } };
+function countChanged() { let n = 0; for (let i = 0; i < DATA.length; i++) if (DATA[i] !== ORIG[i]) n++; return n; }
+function updateDirty() { const n = DATA ? countChanged() : 0; $('#dirty').textContent = n ? `изменено байт: ${n}` : ''; }
+
+renderGallery();
+// Optional: ?bin=<url> loads a file served from the same origin (handy for local testing).
+const qBin = new URLSearchParams(location.search).get('bin');
+if (qBin) fetch(qBin).then(r => r.arrayBuffer()).then(b => loadBuffer(b, qBin.split('/').pop())).catch(() => toast('Не удалось загрузить ' + qBin, true));
+</script>
+</body>
+</html>
