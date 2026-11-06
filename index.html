@@ -108,6 +108,8 @@ details summary{cursor:pointer;color:var(--muted);margin:4px 0}
 .slot.warn{border-color:rgba(255,179,71,.6)}
 .slot .hd{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:4px}
 .slot .hd .t{font-weight:600}
+.slot .hd .t.ed{cursor:text;border-bottom:1px dashed var(--line)} .slot .hd .t.ed:hover{border-color:var(--accent)}
+.slot .hd .t.none{color:var(--muted);font-weight:400}
 .slot .imgs{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-start}
 .slot .imgs figure{margin:0}
 .slot .imgs figcaption{font-size:11px;color:var(--muted)}
@@ -153,11 +155,12 @@ details summary{cursor:pointer;color:var(--muted);margin:4px 0}
       <ol>
         <li>Нажмите «Открыть файлы…» и выберите <b>дамп</b> (и, если модель другая, <b>MF</b> — можно оба сразу, порядок не важен). Или перетащите файлы в это окно.</li>
         <li>Вкладка <b>«Обзор и проверка»</b> — убедитесь, что ключ найден и нет предупреждений.</li>
-        <li>Вкладка <b>«Перевод надписей»</b> — просмотрите русские варианты, поправьте где нужно, нажмите <b>«Применить все переводы»</b>.</li>
+        <li>Вкладка <b>«Перевод надписей»</b> — просмотрите русские варианты, поправьте где нужно, нажмите <b>«Применить все переводы»</b>.<br>
+          <span class="hint">Если для модели нет готового словаря (японский текст у надписей не показан), нажмите <b>«Распознать и перевести автоматически»</b>: текст читается с картинок прямо в браузере, затем переводится онлайн-переводчиком. Машинный перевод стоит просмотреть и поправить.</span></li>
         <li>При необходимости — вкладка <b>«Картинки»</b>: значки и прочая графика (экспорт/импорт PNG, правка пикселей).</li>
         <li>Нажмите <b>«Сохранить BIN»</b> и запишите получившийся файл программатором в ту же микросхему MX29GL640, с проверкой после записи. <b>Оригинальный дамп сохраните отдельно.</b></li>
       </ol>
-      <div class="hint">Файлы обрабатываются только в этом браузере и никуда не отправляются.</div>
+      <div class="hint">Файлы обрабатываются только в этом браузере и никуда не отправляются. Единственное исключение — автоматический перевод: в онлайн-переводчик уходит распознанный японский текст надписей (не сами файлы).</div>
     </div>
   </div>
 
@@ -196,6 +199,11 @@ details summary{cursor:pointer;color:var(--muted);margin:4px 0}
         <button class="primary" id="txApplyAll">Применить все переводы</button>
         <button id="txRevertAll">Вернуть японские надписи</button>
         <span class="hint" id="txStat"></span>
+      </div>
+      <div class="row">
+        <button id="txAuto" title="Для надписей без японского текста — распознать его с картинки; для надписей без перевода — перевести онлайн">Распознать и перевести автоматически</button>
+        <button id="txAutoStop" hidden>Стоп</button>
+        <span class="hint" id="txAutoInfo">распознавание — в браузере (Tesseract.js, при первом запуске скачает ≈2 МБ данных); перевод — онлайн-переводчик, туда уходит только распознанный текст</span>
       </div>
       <details>
         <summary>Ещё: взять перевод из другого дампа, другая модель, сохранить переводы</summary>
@@ -1520,9 +1528,21 @@ function hashPlanes(buf, e) {
 const txKey = () => 'meterFlashEditor.tx2.' + (TX.model || 'unknown');
 function loadSavedTx() { try { return JSON.parse(localStorage.getItem(txKey())) || {}; } catch { return {}; } }
 function txPersist() {
-  const m = {}; for (const it of TX.items) if (it.ru !== it.draft) m[it.addrs[0].a] = it.ru;
+  const m = {};
+  for (const it of TX.items) {
+    const d = TX.dict.get(it.addrs[0].a), jp = it.jp && (!d || d.jp !== it.jp) ? it.jp : '';
+    if (it.ru !== it.draft || jp) m[it.addrs[0].a] = { ru: it.ru, jp };
+    if (it.jp || it.ru.trim()) LEARN[it.key] = { jp: it.jp, ru: it.ru };
+  }
   try { localStorage.setItem(txKey(), JSON.stringify(m)); } catch {}
+  saveLearn();
 }
+// Dictionary by picture content: a text picture identical to one translated before (in any
+// model's dump, including the embedded key) gets its text and translation at once.
+const LEARN_KEY = 'meterFlashEditor.dictByHash';
+function loadLearn() { try { return JSON.parse(localStorage.getItem(LEARN_KEY)) || {}; } catch { return {}; } }
+function saveLearn() { try { localStorage.setItem(LEARN_KEY, JSON.stringify(LEARN)); } catch {} }
+const LEARN = loadLearn();
 const tableKey = m => 'meterFlashEditor.table.' + m;
 function initTx() {
   TX.model = modelId(); TX.ref = null; TX.refName = ''; TX.items = []; TX.table = null; TX.page = 0; TX.dict = new Map(); TX.src = '';
@@ -1565,9 +1585,16 @@ function buildItems() {
     if (!it) { it = { key, w: e.w, h: e.h, addrs: [], jp: '', draft: '', ru: '' }; groups.set(key, it); TX.items.push(it); }
     it.addrs.push(e);
     const d = TX.dict.get(e.a);
-    if (d && !it.jp) { it.jp = d.jp; it.draft = it.ru = d.ru; }
+    if (d && !it.jp) { it.jp = d.jp; it.draft = it.ru = d.ru; LEARN[key] = { jp: d.jp, ru: d.ru }; }
   }
-  for (const it of TX.items) { const s = saved[it.addrs[0].a]; if (typeof s === 'string') it.ru = s; }
+  for (const it of TX.items) {
+    const L = LEARN[it.key];
+    if (L && !it.jp) { it.jp = L.jp || ''; it.draft = it.ru = L.ru || ''; }
+    const s = saved[it.addrs[0].a];
+    if (typeof s === 'string') it.ru = s;
+    else if (s && typeof s === 'object') { if (typeof s.ru === 'string') it.ru = s.ru; if (s.jp) it.jp = s.jp; }
+  }
+  saveLearn();
   if (!TX.items.some(it => it.jp)) TX.filter = 'all';
 }
 function itemChanged(it) { const pl = planes(it.addrs[0]); for (let i = pl.mask; i < pl.end; i++) if (DATA[i] !== ORIG[i]) return true; return false; }
@@ -1626,7 +1653,8 @@ function copyItem(it, from) { for (const e of it.addrs) { const pl = planes(e); 
 
 const TX_FILTERS = [
   ['jp', 'Японские надписи', it => !!it.jp],
-  ['todo', 'Ещё не применены', it => !!it.jp && !itemChanged(it)],
+  ['nojp', 'Не распознаны', it => !it.jp],
+  ['todo', 'Ещё не применены', it => (!!it.jp || !!it.ru.trim()) && !itemChanged(it)],
   ['done', 'Применены', it => itemChanged(it)],
   ['ref', 'Есть в загруженном дампе', it => { const r = itemRef(it); return r && r.diff && !r.ff; }],
   ['all', 'Все картинки-надписи', () => true],
@@ -1646,7 +1674,7 @@ function renderTx() {
     c.onclick = () => { TX.filter = key; TX.page = 0; renderTx(); };
     chips.appendChild(c);
   }
-  const jp = TX.items.filter(it => it.jp);
+  const jp = TX.items.filter(it => it.jp || it.ru.trim());
   $('#txStat').textContent = TX.items.length ? `применено: ${jp.filter(itemChanged).length} из ${jp.length}` : '';
   const q = TX.search.toLowerCase();
   const list = TX.items.filter((TX_FILTERS.find(f => f[0] === TX.filter) || TX_FILTERS[0])[2])
@@ -1662,8 +1690,19 @@ function txCard(it) {
   const card = document.createElement('div'), changed = itemChanged(it), rs = itemRef(it);
   card.className = 'slot' + (changed ? ' done' : '');
   const hd = document.createElement('div'); hd.className = 'hd';
-  hd.innerHTML = `<span class="t">${esc(it.jp || 'надпись')}</span><span class="mono hint">${hex(it.addrs[0].a)} · ${it.w}×${it.h}${it.addrs.length > 1 ? ` · ${it.addrs.length} копии` : ''}</span>` +
+  hd.innerHTML = `<span class="t ed${it.jp ? '' : ' none'}" title="Клик — исправить японский текст">${esc(it.jp || 'надпись (японский текст не распознан)')}</span><span class="mono hint">${hex(it.addrs[0].a)} · ${it.w}×${it.h}${it.addrs.length > 1 ? ` · ${it.addrs.length} копии` : ''}</span>` +
     (changed ? '<span class="badge ok">применено</span>' : '') + (rs && rs.ff ? '<span class="badge b">в загруженном дампе залита FF</span>' : '');
+  hd.querySelector('.t').onclick = () => {
+    const v = prompt('Японский текст надписи (строки — через |):', it.jp);
+    if (v !== null && v.trim() !== it.jp) { it.jp = v.trim(); txPersist(); card.replaceWith(txCard(it)); }
+  };
+  const ocrB = document.createElement('button'); ocrB.className = 'small'; ocrB.textContent = it.jp ? 'распознать заново' : 'распознать';
+  ocrB.title = 'Прочитать японский текст с картинки (в браузере)';
+  ocrB.onclick = () => runAuto([it], { ocr: true, tr: false }).then(() => card.replaceWith(txCard(it)));
+  const trB = document.createElement('button'); trB.className = 'small'; trB.textContent = 'перевести'; trB.disabled = !it.jp;
+  trB.title = 'Перевести японский текст онлайн-переводчиком';
+  trB.onclick = () => runAuto([it], { ocr: false, tr: true, force: true }).then(() => card.replaceWith(txCard(it)));
+  hd.append(ocrB, trB);
   const imgs = document.createElement('div'); imgs.className = 'imgs';
   const fig = (cv, cap, extra) => { const f = document.createElement('figure'), fc = document.createElement('figcaption'); fc.textContent = cap; f.append(cv, fc); if (extra) f.appendChild(extra); imgs.appendChild(f); return f; };
   fig(alphaCanvas(ORIG, it), 'оригинал');
@@ -1692,7 +1731,7 @@ function txCard(it) {
   card.append(hd, imgs, row);
   return card;
 }
-function renderTxStat() { const jp = TX.items.filter(it => it.jp); $('#txStat').textContent = `применено: ${jp.filter(itemChanged).length} из ${jp.length}`; }
+function renderTxStat() { const jp = TX.items.filter(it => it.jp || it.ru.trim()); $('#txStat').textContent = `применено: ${jp.filter(itemChanged).length} из ${jp.length}`; }
 ['#txFam', '#txWt', '#txSize', '#txMinScale'].forEach(s => $(s).addEventListener('change', renderTx));
 $('#txSearch').addEventListener('input', () => { TX.search = $('#txSearch').value; TX.page = 0; renderTx(); });
 $('#txPrev').onclick = () => { TX.page--; renderTx(); window.scrollTo(0, 0); };
@@ -1700,7 +1739,7 @@ $('#txNext').onclick = () => { TX.page++; renderTx(); window.scrollTo(0, 0); };
 $('#txApplyAll').onclick = () => {
   if (!DATA || !TX.items.length) return;
   let n = 0; const tight = [];
-  for (const it of TX.items) { if (!it.jp || !it.ru.trim()) continue; const r = applyItem(it); n++; if (r.sx < 0.8) tight.push(it.ru.replace(/\|/g, ' ')); }
+  for (const it of TX.items) { if (!it.ru.trim()) continue; const r = applyItem(it); n++; if (r.sx < 0.8) tight.push(it.ru.replace(/\|/g, ' ')); }
   updateDirty(); renderTx();
   toast(`Применено переводов: ${n}.` + (tight.length ? ` Сильно сжаты по ширине (${tight.length}): ${tight.slice(0, 4).join('; ')}${tight.length > 4 ? '…' : ''}` : ''));
 };
@@ -1725,6 +1764,129 @@ $('#txCopyAll').onclick = () => {
   for (const it of TX.items) { const r = itemRef(it); if (r && r.diff && !r.ff) { copyItem(it, TX.ref); n++; } }
   updateDirty(); renderTx(); toast(`Взято из загруженного дампа: ${n} надписей (залитые FF пропущены)`);
 };
+// ---------- Automatic reading and translation ----------
+// The Japanese text is read from the picture in the browser with Tesseract.js (jpn model);
+// each text line is cut out and upscaled separately, which reads far better than the whole
+// picture. The text is then translated by an online service (only the text leaves the browser).
+function loadScript(src) {
+  return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => rej(new Error('не удалось загрузить ' + src)); document.head.appendChild(s); });
+}
+let OCRW = null;
+async function ocrWorker(progress) {
+  if (OCRW) return OCRW;
+  if (!window.Tesseract) await loadScript('https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js');
+  // createWorker never settles when the download of the language data fails, hence the timeout
+  const w = await Promise.race([
+    Tesseract.createWorker('jpn', 1, { logger: m => progress && m.status && m.status !== 'recognizing text' && progress(`${m.status} ${Math.round((m.progress || 0) * 100)}%`) }),
+    new Promise((_, rej) => setTimeout(() => rej(new Error('не удалось загрузить модуль распознавания (нет связи с CDN?)')), 180000)),
+  ]);
+  await w.setParameters({ tessedit_pageseg_mode: '7', preserve_interword_spaces: '0' });
+  return (OCRW = w);
+}
+// Black text on white, upscaled so that the line is about 40 px tall, with a white margin.
+function ocrCanvas(src, y0, y1) {
+  const h = y1 - y0 + 1, scale = Math.max(2, Math.min(8, Math.round(40 / h))), pad = 16;
+  const c = document.createElement('canvas'); c.width = src.width * scale + pad * 2; c.height = h * scale + pad * 2;
+  const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+  ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high'; ctx.filter = 'invert(1)';
+  ctx.drawImage(src, 0, y0, src.width, h, pad, pad, src.width * scale, h * scale);
+  return c;
+}
+const CJK = '[\\u3000-\\u30ff\\u3400-\\u9fff\\uff00-\\uffef]';
+const cleanJp = t => t.replace(new RegExp(`\\s+(?=${CJK})|(?<=${CJK})\\s+`, 'g'), '').replace(/[ \t]+/g, ' ').trim();
+// Text lines for OCR: row groups split by any blank row; small groups (dakuten, punctuation)
+// are merged into the nearest neighbour. Unlike jpLines, a 2–3 px gap between lines stays a gap.
+function ocrLines(it) {
+  const e = it.addrs[0], pl = planes(e), g = []; let s = -1;
+  for (let y = 0; y <= e.h; y++) {
+    let ink = false; if (y < e.h) for (let x = 0; x < e.w; x++) if (getA(ORIG, pl, y * e.w + x)) { ink = true; break; }
+    if (ink && s < 0) s = y; if (!ink && s >= 0) { g.push([s, y - 1]); s = -1; }
+  }
+  const maxH = Math.max(0, ...g.map(([a, b]) => b - a + 1));
+  for (let k = 0; k < g.length && g.length > 1;) {
+    const [a, b] = g[k];
+    if (b - a + 1 >= maxH * 0.5) { k++; continue; }
+    const up = k > 0 ? a - g[k - 1][1] : Infinity, dn = k + 1 < g.length ? g[k + 1][0] - b : Infinity;
+    if (up <= dn) { g[k - 1][1] = b; g.splice(k, 1); } else { g[k + 1][0] = a; g.splice(k, 1); }
+  }
+  return g;
+}
+async function ocrItem(it, progress) {
+  const lines = ocrLines(it).filter(([a, b]) => b - a >= 3);
+  if (!lines.length) return ''; // nothing drawn in the picture
+  const w = await ocrWorker(progress), e = it.addrs[0], src = alphaCanvas(ORIG, it);
+  const out = [];
+  for (const [a, b] of lines) {
+    const r = await w.recognize(ocrCanvas(src, Math.max(0, a - 2), Math.min(e.h - 1, b + 2)));
+    const t = cleanJp(r.data.text.replace(/\n/g, ' ')); if (t) out.push(t);
+  }
+  return out.join('|');
+}
+async function translateJp(text) {
+  const q = text.replace(/\|/g, '\n');
+  try {
+    const r = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=ja&tl=ru&dt=t&q=${encodeURIComponent(q)}`);
+    if (!r.ok) throw new Error(r.status);
+    const j = await r.json(); const t = j[0].map(x => x[0]).join('').trim(); if (!t) throw new Error('empty');
+    return t;
+  } catch (e1) {
+    const r = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(q)}&langpair=ja|ru`);
+    const j = await r.json();
+    if (j.responseStatus !== 200 || !j.responseData || !j.responseData.translatedText) throw new Error('онлайн-перевод недоступен (' + (e1.message || e1) + ')');
+    return j.responseData.translatedText.trim();
+  }
+}
+// Give the translation as many lines as the Japanese has, splitting long lines at spaces.
+function fitLines(ru, n) {
+  let lines = ru.split(/\n|\|/).map(s => s.trim()).filter(Boolean);
+  while (lines.length < n) {
+    let k = -1, kl = 0; lines.forEach((l, i) => { if (l.length > kl && l.includes(' ')) { kl = l.length; k = i; } });
+    if (k < 0) break;
+    const l = lines[k], ws = [...l.matchAll(/ /g)].map(m => m.index), cut = ws.reduce((b, p) => Math.abs(p - l.length / 2) < Math.abs(b - l.length / 2) ? p : b, ws[0]);
+    lines.splice(k, 1, l.slice(0, cut).trim(), l.slice(cut + 1).trim());
+  }
+  return lines.join('|');
+}
+let AUTO = null;
+// items: pictures to process; ocr — read Japanese where missing; tr — translate where no Russian (force: always)
+async function runAuto(items, opt) {
+  if (AUTO) { toast('Уже идёт обработка — дождитесь или нажмите «Стоп»', true); return; }
+  AUTO = { stop: false }; const info = $('#txAutoInfo'), stopB = $('#txAutoStop'), goB = $('#txAuto');
+  stopB.hidden = false; goB.disabled = true;
+  const say = t => info.textContent = t;
+  let nOcr = 0, nTr = 0, fail = 0, k = 0;
+  try {
+    for (const it of items) {
+      if (AUTO.stop) break;
+      k++;
+      if (opt.ocr && !it.jp) {
+        say(`распознавание ${k} из ${items.length}…`);
+        try { const t = await ocrItem(it, say); if (t) { it.jp = t; nOcr++; } } catch (e) { fail++; if (fail > 3 && !nOcr) throw e; }
+      }
+      if (opt.tr && it.jp && (opt.force || !it.ru.trim())) {
+        say(`перевод ${k} из ${items.length}: ${it.jp}`);
+        try { const t = await translateJp(it.jp); if (t) { it.ru = fitLines(t, it.jp.split('|').length); if (!it.draft) it.draft = it.ru; nTr++; } }
+        catch (e) { fail++; if (fail > 3 && !nTr) throw e; }
+        await new Promise(r => setTimeout(r, 150));
+      }
+      if (k % 5 === 0) txPersist();
+    }
+    say(`готово: распознано ${nOcr}, переведено ${nTr}` + (fail ? `, не удалось ${fail}` : '') + (AUTO.stop ? ' (остановлено)' : '') + '. Проверьте результат и нажмите «Применить все переводы».');
+  } catch (e) {
+    say('ошибка: ' + (e.message || e)); toast('Не удалось: ' + (e.message || e), true);
+  } finally {
+    txPersist(); AUTO = null; stopB.hidden = true; goB.disabled = false;
+  }
+}
+$('#txAuto').onclick = () => {
+  if (!DATA || !TX.items.length) return;
+  const list = TX.items.filter(it => !it.jp || !it.ru.trim());
+  if (!list.length) { toast('У всех надписей уже есть японский текст и перевод'); return; }
+  if (!confirm(`Будет обработано надписей: ${list.length}.\nРаспознавание идёт в браузере, распознанный японский текст отправляется в онлайн-переводчик. Продолжить?`)) return;
+  runAuto(list, { ocr: true, tr: true }).then(renderTx);
+};
+$('#txAutoStop').onclick = () => { if (AUTO) AUTO.stop = true; };
+
 // Generic: find the picture table (12-byte big-endian records) in a CPU firmware dump.
 function parseMfTable(mf) {
   const dv = new DataView(mf.buffer, mf.byteOffset, mf.byteLength), L = mf.length;
