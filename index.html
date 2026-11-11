@@ -1748,10 +1748,10 @@ function applyItem(it) {
   } else {
     // no alpha plane: the picture carries background and ink itself, which may be inverted
     // (dark text on a light preview); draw between the original background and ink levels
+    // ink = the extreme level the original uses (outlined "inactive" captions get solid text: readable beats faithful)
     const v = textView(it), cnt = new Array(16).fill(0); for (const x of v.lv) cnt[x]++;
-    const bg = cnt.indexOf(Math.max(...cnt)); let ink = bg, ic = 0;
-    for (let k = 0; k < 16; k++) if (Math.abs(k - bg) >= 4 && cnt[k] > ic) { ink = k; ic = cnt[k]; }
-    if (ink === bg) ink = bg < 8 ? 15 : 0;
+    const bg = cnt.indexOf(Math.max(...cnt)); let ink = bg < 8 ? 15 : 0;
+    if (bg < 8) { for (let k = 15; k > bg; k--) if (cnt[k] >= 4) { ink = k; break; } } else { for (let k = 0; k < bg; k++) if (cnt[k] >= 4) { ink = k; break; } }
     if (!it.box) for (let i = 0; i < r.levels.length; i++) r.levels[i] = Math.round(bg + (ink - bg) * r.levels[i] / 15);
     else { const u = upSize(it), [x0, y0, w, h] = it.box, full = uprightLevels(ORIG, it), box = renderRuBox(it, it.ru).levels;
       for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) full[(y0 + y) * u.w + x0 + x] = Math.round(bg + (ink - bg) * box[y * w + x] / 15);
